@@ -1,0 +1,142 @@
+// Modelo de datos de ReservaMe — Fase -1
+// Basado en Documento-Tecnico-ReservaMe-Fase1.md, sección 3.
+// Se agrega HorarioInstitucional (no estaba en el doc original) para permitir
+// que el Administrador configure, por día de la semana, la salida de
+// estudiantes (fin de bloques de "Clase") y la salida de encargados/profesores
+// (límite para reservas de "Reunión/otro uso").
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Colegio {
+  id       String                 @id @default(uuid())
+  nombre   String
+  usuarios Usuario[]
+  salas    Sala[]
+  horarios HorarioInstitucional[]
+
+  @@map("colegio")
+}
+
+model Usuario {
+  id                 String   @id @default(uuid())
+  colegioId          String   @map("colegio_id")
+  colegio            Colegio  @relation(fields: [colegioId], references: [id])
+  nombre             String
+  emailInstitucional String   @unique @map("email_institucional")
+  entraIdOid         String?  @unique @map("entra_id_oid")
+  activo             Boolean  @default(true)
+  creadoEn           DateTime @default(now()) @map("creado_en")
+
+  roles           UsuarioRol[]
+  reservas        Reserva[]
+  salasEncargadas Sala[]         @relation("EncargadoSala")
+  notificaciones  Notificacion[]
+
+  @@map("usuario")
+}
+
+model Rol {
+  id      String       @id @default(uuid())
+  nombre  String       @unique // docente | encargado_sala | administrador
+  usuarios UsuarioRol[]
+
+  @@map("rol")
+}
+
+model UsuarioRol {
+  usuarioId String @map("usuario_id")
+  rolId     String @map("rol_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  rol       Rol     @relation(fields: [rolId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, rolId])
+  @@map("usuario_rol")
+}
+
+model Sala {
+  id           String   @id @default(uuid())
+  colegioId    String   @map("colegio_id")
+  colegio      Colegio  @relation(fields: [colegioId], references: [id])
+  nombre       String
+  capacidad    Int?
+  equipamiento String?
+  modoReserva  String   @default("autoservicio") @map("modo_reserva") // autoservicio | con_aprobacion
+  encargadoId  String?  @map("encargado_id")
+  encargado    Usuario? @relation("EncargadoSala", fields: [encargadoId], references: [id])
+  activa       Boolean  @default(true)
+
+  reservas Reserva[]
+
+  @@map("sala")
+}
+
+model Reserva {
+  id             String    @id @default(uuid())
+  salaId         String    @map("sala_id")
+  sala           Sala      @relation(fields: [salaId], references: [id])
+  usuarioId      String    @map("usuario_id")
+  usuario        Usuario   @relation(fields: [usuarioId], references: [id])
+  tipoUso        String    @map("tipo_uso") // clase | reunion_otro
+  fechaInicio    DateTime  @map("fecha_inicio")
+  fechaFin       DateTime  @map("fecha_fin")
+  estado         String    @default("pendiente") // pendiente | confirmada | rechazada | cancelada
+  motivoRechazo  String?   @map("motivo_rechazo")
+  creadoEn       DateTime  @default(now()) @map("creado_en")
+
+  notificaciones Notificacion[]
+
+  @@index([salaId, fechaInicio, fechaFin])
+  @@map("reserva")
+}
+
+model Notificacion {
+  id             String    @id @default(uuid())
+  reservaId      String    @map("reserva_id")
+  reserva        Reserva   @relation(fields: [reservaId], references: [id])
+  destinatarioId String    @map("destinatario_id")
+  destinatario   Usuario   @relation(fields: [destinatarioId], references: [id])
+  canal          String    // push | email
+  mensaje        String
+  estadoEnvio    String    @default("pendiente") @map("estado_envio") // enviado | fallido | pendiente
+  leida          Boolean   @default(false)
+  enviadoEn      DateTime? @map("enviado_en")
+  creadoEn       DateTime  @default(now()) @map("creado_en")
+
+  @@map("notificacion")
+}
+
+// Horario institucional configurable por día de la semana (0=domingo .. 6=sábado).
+// horaInicio / horaSalidaEstudiantes / horaSalidaProfesores se guardan como minutos
+// desde las 00:00 (ej. 08:00 = 480) para facilitar los cálculos de bloques.
+model HorarioInstitucional {
+  id                     String  @id @default(uuid())
+  colegioId              String  @map("colegio_id")
+  colegio                Colegio @relation(fields: [colegioId], references: [id])
+  diaSemana              Int     @map("dia_semana")
+  abierto                Boolean @default(true)
+  horaInicio             Int     @map("hora_inicio")
+  horaSalidaEstudiantes  Int     @map("hora_salida_estudiantes")
+  horaSalidaProfesores   Int     @map("hora_salida_profesores")
+
+  @@unique([colegioId, diaSemana])
+  @@map("horario_institucional")
+}
+
+// Tokens de un solo uso para el login provisional por magic link (Plan B, sección 7).
+model MagicLinkToken {
+  id        String    @id @default(uuid())
+  email     String
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  creadoEn  DateTime  @default(now()) @map("creado_en")
+
+  @@map("magic_link_token")
+}
