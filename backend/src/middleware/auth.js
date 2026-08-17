@@ -12,7 +12,7 @@ function firmarSesion(usuarioId) {
 function setCookieSesion(res, token) {
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: 'none',
     secure: process.env.NODE_ENV === 'production',
     maxAge: 1000 * 60 * 60 * 12, // 12h, ver nota del doc técnico sobre duración de sesión
     path: '/',
