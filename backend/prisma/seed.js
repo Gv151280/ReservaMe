@@ -2,7 +2,7 @@
 // desde la app, se crea manualmente al desplegar el sistema (script de seed)".
 // Este script hace exactamente eso, además de dejar el resto de los datos
 // base listos: colegio, roles, las 2 salas del MVP, y el horario institucional
-// por defecto (mismo que se usó en el prototipo interactivo).
+// real del colegio (9 horas de clase de 45 min con sus recreos reales).
 
 require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
@@ -11,14 +11,34 @@ const prisma = new PrismaClient();
 const ROLES = ['docente', 'encargado_sala', 'administrador'];
 
 // lunes=1 ... sábado=6, domingo=0 (getDay() de JS)
+// Horario real del colegio: 9 horas de clase de 45 min cada una, con 4 recreos
+// (20 min, 10 min, 45 min de almuerzo, 15 min). Miércoles termina después de la
+// 6ª hora (13:00), sin las últimas 3 horas ni el recreo de almuerzo.
+const HORAS_COMPLETAS = [
+  { horaInicio: 480, horaFin: 525 }, // 1ª hora  08:00-08:45
+  { horaInicio: 525, horaFin: 570 }, // 2ª hora  08:45-09:30
+  // recreo 20 min: 09:30-09:50
+  { horaInicio: 590, horaFin: 635 }, // 3ª hora  09:50-10:35
+  { horaInicio: 635, horaFin: 680 }, // 4ª hora  10:35-11:20
+  // recreo 10 min: 11:20-11:30
+  { horaInicio: 690, horaFin: 735 }, // 5ª hora  11:30-12:15
+  { horaInicio: 735, horaFin: 780 }, // 6ª hora  12:15-13:00
+  // recreo almuerzo 45 min: 13:00-13:45
+  { horaInicio: 825, horaFin: 870 }, // 7ª hora  13:45-14:30
+  { horaInicio: 870, horaFin: 915 }, // 8ª hora  14:30-15:15
+  // recreo 15 min: 15:15-15:30
+  { horaInicio: 930, horaFin: 975 }, // 9ª hora  15:30-16:15
+];
+const HORAS_MIERCOLES = HORAS_COMPLETAS.slice(0, 6); // hasta la 6ª hora, termina 13:00
+
 const HORARIO_DEFAULT = [
-  { diaSemana: 1, abierto: true, horaInicio: 480, horaSalidaEstudiantes: 960, horaSalidaProfesores: 1080 }, // lunes 08:00-16:00 / hasta 18:00
-  { diaSemana: 2, abierto: true, horaInicio: 480, horaSalidaEstudiantes: 960, horaSalidaProfesores: 1080 }, // martes
-  { diaSemana: 3, abierto: true, horaInicio: 480, horaSalidaEstudiantes: 960, horaSalidaProfesores: 1080 }, // miércoles
-  { diaSemana: 4, abierto: true, horaInicio: 480, horaSalidaEstudiantes: 960, horaSalidaProfesores: 1080 }, // jueves
-  { diaSemana: 5, abierto: true, horaInicio: 480, horaSalidaEstudiantes: 780, horaSalidaProfesores: 900 },  // viernes 08:00-13:00 / hasta 15:00
-  { diaSemana: 6, abierto: false, horaInicio: 540, horaSalidaEstudiantes: 540, horaSalidaProfesores: 540 }, // sábado cerrado
-  { diaSemana: 0, abierto: false, horaInicio: 540, horaSalidaEstudiantes: 540, horaSalidaProfesores: 540 }, // domingo cerrado
+  { diaSemana: 1, abierto: true, horaInicio: 480, horaSalidaProfesores: 990, bloques: HORAS_COMPLETAS },  // lunes, salida profesores 16:30
+  { diaSemana: 2, abierto: true, horaInicio: 480, horaSalidaProfesores: 990, bloques: HORAS_COMPLETAS },  // martes
+  { diaSemana: 3, abierto: true, horaInicio: 480, horaSalidaProfesores: 1020, bloques: HORAS_MIERCOLES }, // miércoles, salida profesores 17:00
+  { diaSemana: 4, abierto: true, horaInicio: 480, horaSalidaProfesores: 990, bloques: HORAS_COMPLETAS },  // jueves
+  { diaSemana: 5, abierto: true, horaInicio: 480, horaSalidaProfesores: 990, bloques: HORAS_COMPLETAS },  // viernes
+  { diaSemana: 6, abierto: false, horaInicio: 540, horaSalidaProfesores: 540, bloques: [] },              // sábado cerrado
+  { diaSemana: 0, abierto: false, horaInicio: 540, horaSalidaProfesores: 540, bloques: [] },               // domingo cerrado
 ];
 
 async function main() {
@@ -71,13 +91,18 @@ async function main() {
   console.log('Salas listas:', salaProyectos.nombre, '/', salaCra.nombre);
 
   for (const dia of HORARIO_DEFAULT) {
+    const { bloques, ...camposDia } = dia;
     await prisma.horarioInstitucional.upsert({
       where: { colegioId_diaSemana: { colegioId: colegio.id, diaSemana: dia.diaSemana } },
       update: {},
-      create: { colegioId: colegio.id, ...dia },
+      create: {
+        colegioId: colegio.id,
+        ...camposDia,
+        bloques: { create: bloques },
+      },
     });
   }
-  console.log('Horario institucional por defecto configurado (editable desde Admin > Horario).');
+  console.log('Horario institucional real configurado (editable desde Admin > Horario).');
 
   async function colegioIdExistente() {
     const existente = await prisma.colegio.findFirst();

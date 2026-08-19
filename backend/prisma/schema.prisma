@@ -1,9 +1,9 @@
 // Modelo de datos de ReservaMe — Fase -1
 // Basado en Documento-Tecnico-ReservaMe-Fase1.md, sección 3.
-// Se agrega HorarioInstitucional (no estaba en el doc original) para permitir
-// que el Administrador configure, por día de la semana, la salida de
-// estudiantes (fin de bloques de "Clase") y la salida de encargados/profesores
-// (límite para reservas de "Reunión/otro uso").
+// Se agrega HorarioInstitucional + BloqueClase (no estaban en el doc original)
+// para permitir que el Administrador configure, por día de la semana, las horas
+// de clase reales (con recreos de duración variable entre ellas) y hasta qué hora
+// quedan encargados/profesores en el colegio.
 
 generator client {
   provider = "prisma-client-js"
@@ -113,20 +113,36 @@ model Notificacion {
 }
 
 // Horario institucional configurable por día de la semana (0=domingo .. 6=sábado).
-// horaInicio / horaSalidaEstudiantes / horaSalidaProfesores se guardan como minutos
-// desde las 00:00 (ej. 08:00 = 480) para facilitar los cálculos de bloques.
+// El Administrador define la lista real de horas de clase de cada día — cada una
+// con su propio inicio y fin — y los recreos quedan implícitos como los espacios
+// entre una hora y la siguiente (pueden durar distinto entre sí).
+// horaInicio / horaSalidaProfesores se guardan en minutos desde las 00:00 (08:00 = 480).
 model HorarioInstitucional {
-  id                     String  @id @default(uuid())
-  colegioId              String  @map("colegio_id")
-  colegio                Colegio @relation(fields: [colegioId], references: [id])
-  diaSemana              Int     @map("dia_semana")
-  abierto                Boolean @default(true)
-  horaInicio             Int     @map("hora_inicio")
-  horaSalidaEstudiantes  Int     @map("hora_salida_estudiantes")
-  horaSalidaProfesores   Int     @map("hora_salida_profesores")
+  id                   String  @id @default(uuid())
+  colegioId            String  @map("colegio_id")
+  colegio              Colegio @relation(fields: [colegioId], references: [id])
+  diaSemana            Int     @map("dia_semana")
+  abierto              Boolean @default(true)
+  horaInicio           Int     @map("hora_inicio") // apertura del colegio (límite inferior para "reunión/otro")
+  horaSalidaProfesores Int     @map("hora_salida_profesores") // límite superior para "reunión/otro"
+
+  bloques BloqueClase[]
 
   @@unique([colegioId, diaSemana])
   @@map("horario_institucional")
+}
+
+// Una hora de clase real dentro de un día del horario institucional.
+// Las reservas de tipo "clase" deben calzar exactamente con una de estas horas,
+// o con dos horas consecutivas (sin recreo entre ellas) para una reserva de 90 min.
+model BloqueClase {
+  id         String               @id @default(uuid())
+  horarioId  String               @map("horario_id")
+  horario    HorarioInstitucional @relation(fields: [horarioId], references: [id], onDelete: Cascade)
+  horaInicio Int                  @map("hora_inicio")
+  horaFin    Int                  @map("hora_fin")
+
+  @@map("bloque_clase")
 }
 
 // Tokens de un solo uso para el login provisional por magic link (Plan B, sección 7).

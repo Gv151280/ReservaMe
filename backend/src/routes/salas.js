@@ -18,6 +18,7 @@ async function horarioDelDia(colegioId, fechaISO) {
   const diaSemana = new Date(y, m - 1, d).getDay();
   return prisma.horarioInstitucional.findUnique({
     where: { colegioId_diaSemana: { colegioId, diaSemana } },
+    include: { bloques: true },
   });
 }
 
@@ -60,7 +61,7 @@ router.get('/', requireAuth, async (req, res) => {
   res.json({ salas: salasConDisponibilidad });
 });
 
-// GET /salas/:id/disponibilidad?fecha=YYYY-MM-DD -> bloques de clase (ocupado/libre) + horario del día.
+// GET /salas/:id/disponibilidad?fecha=YYYY-MM-DD -> horas de clase (ocupado/libre) + horario del día.
 router.get('/:id/disponibilidad', requireAuth, async (req, res) => {
   const fechaISO = req.query.fecha;
   if (!fechaISO) return res.status(400).json({ error: 'Falta el parámetro fecha (YYYY-MM-DD).' });
@@ -97,7 +98,6 @@ router.get('/:id/disponibilidad', requireAuth, async (req, res) => {
     abierto: true,
     horario: {
       horaInicio: cfg.horaInicio,
-      horaSalidaEstudiantes: cfg.horaSalidaEstudiantes,
       horaSalidaProfesores: cfg.horaSalidaProfesores,
     },
     bloques: bloquesConEstado,

@@ -1,8 +1,7 @@
-// Igual lógica que el prototipo interactivo: bloques de 45 min para "Clase"
-// entre horaInicio y horaSalidaEstudiantes; "Reunión/otro" acepta cualquier
-// horario libre entre horaInicio y horaSalidaProfesores.
-
-const DURACION_BLOQUE_MIN = 45;
+// Los bloques de "Clase" ya NO se calculan automáticamente cada 45 min — vienen
+// directo de la lista de horas de clase (BloqueClase) que el Administrador
+// configuró para ese día. Los recreos son, simplemente, los espacios de tiempo
+// que quedan entre una hora y la siguiente.
 
 function pad(n) {
   return n < 10 ? '0' + n : '' + n;
@@ -18,29 +17,25 @@ function hhmmToMinutes(str) {
   return h * 60 + m;
 }
 
-// cfg: { abierto, horaInicio, horaSalidaEstudiantes, horaSalidaProfesores } (minutos desde 00:00)
+// cfg: { abierto, bloques: [{horaInicio, horaFin}, ...] }
+// Devuelve las horas de clase del día, ordenadas por hora de inicio.
 function bloquesDelDia(cfg) {
-  if (!cfg || !cfg.abierto) return [];
-  const bloques = [];
-  let start = cfg.horaInicio;
-  while (start + DURACION_BLOQUE_MIN <= cfg.horaSalidaEstudiantes) {
-    bloques.push({ start, end: start + DURACION_BLOQUE_MIN });
-    start += DURACION_BLOQUE_MIN;
-  }
-  return bloques;
+  if (!cfg || !cfg.abierto || !Array.isArray(cfg.bloques)) return [];
+  return cfg.bloques
+    .slice()
+    .sort((a, b) => a.horaInicio - b.horaInicio)
+    .map((b) => ({ start: b.horaInicio, end: b.horaFin }));
 }
 
-// Dado un horario de config y un rango en minutos [inicioMin, finMin), determina
-// si ese rango corresponde exactamente a 1 o 2 bloques consecutivos válidos
-// (45 o 90 min, alineados al horario institucional del día).
+// Válido si [inicioMin, finMin) calza EXACTO con una hora de clase (duración simple),
+// o con dos horas consecutivas sin recreo entre ellas (duración doble, ej. 90 min).
 function esRangoDeClaseValido(cfg, inicioMin, finMin) {
-  const duracion = finMin - inicioMin;
-  if (duracion !== 45 && duracion !== 90) return false;
   const bloques = bloquesDelDia(cfg);
   return bloques.some((b) => {
-    if (duracion === 45) return b.start === inicioMin && b.end === finMin;
-    const siguiente = bloques.find((x) => x.start === b.end);
-    return b.start === inicioMin && siguiente && siguiente.end === finMin;
+    if (b.start === inicioMin && b.end === finMin) return true; // 1 hora exacta
+    if (b.start !== inicioMin) return false;
+    const siguiente = bloques.find((x) => x.start === b.end); // sin recreo entre medio
+    return siguiente && siguiente.end === finMin; // 2 horas consecutivas exactas
   });
 }
 
@@ -48,13 +43,11 @@ function dentroDeRangoReunion(cfg, inicioMin, finMin) {
   return inicioMin >= cfg.horaInicio && finMin <= cfg.horaSalidaProfesores;
 }
 
-// Convierte una fecha (Date, en horario local del servidor) a minutos desde medianoche.
 function minutosDelDia(date) {
   return date.getHours() * 60 + date.getMinutes();
 }
 
 module.exports = {
-  DURACION_BLOQUE_MIN,
   minutesToHHMM,
   hhmmToMinutes,
   bloquesDelDia,

@@ -136,7 +136,7 @@ export default function Reservar() {
               <button className={duracion === 45 ? 'active' : ''} onClick={() => setDuracion(45)}>45 min</button>
               <button className={duracion === 90 ? 'active' : ''} onClick={() => setDuracion(90)}>90 min (2 bloques)</button>
             </div>
-            <p className="hint">Los bloques siguen el horario institucional de ese día (los alumnos salen a las {minutesToHHMM(cfg.horaSalidaEstudiantes)}).</p>
+            <p className="hint">Los bloques corresponden a las horas de clase reales de ese día (no incluyen recreos).</p>
           </div>
 
           {bloquesRenderizados.length === 0 ? (

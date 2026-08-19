@@ -62,6 +62,7 @@ async function validarTipoUsoYHorario(colegioId, tipoUso, fechaInicio, fechaFin)
   const diaSemana = fechaInicio.getDay();
   const cfg = await prisma.horarioInstitucional.findUnique({
     where: { colegioId_diaSemana: { colegioId, diaSemana } },
+    include: { bloques: true },
   });
   if (!cfg || !cfg.abierto) {
     throw errorHttp(400, 'El colegio no tiene jornada ese día, no se puede reservar.');
@@ -71,16 +72,10 @@ async function validarTipoUsoYHorario(colegioId, tipoUso, fechaInicio, fechaFin)
   const finMin = minutosDelDia(fechaFin);
 
   if (tipoUso === 'clase') {
-    const cfgMin = {
-      abierto: cfg.abierto,
-      horaInicio: cfg.horaInicio,
-      horaSalidaEstudiantes: cfg.horaSalidaEstudiantes,
-      horaSalidaProfesores: cfg.horaSalidaProfesores,
-    };
-    if (!esRangoDeClaseValido(cfgMin, inicioMin, finMin)) {
+    if (!esRangoDeClaseValido(cfg, inicioMin, finMin)) {
       throw errorHttp(
         400,
-        'Para reservas de "Clase" el horario debe ser un bloque de 45 o 90 minutos alineado al horario institucional de ese día.'
+        'Para reservas de "Clase" el horario debe calzar exactamente con una hora de clase, o con dos horas consecutivas sin recreo entre medio, según el horario institucional de ese día.'
       );
     }
   } else if (tipoUso === 'reunion_otro') {
