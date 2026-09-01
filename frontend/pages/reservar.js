@@ -3,12 +3,12 @@ import { useRouter } from 'next/router';
 import { api } from '../lib/api';
 import { todayISO, fmtFechaLarga, minutesToHHMM, combinarFechaMinutos, fmtHora } from '../lib/dates';
 import { useToast } from '../components/Toast';
-
+ 
 export default function Reservar() {
   const router = useRouter();
   const { showToast } = useToast();
   const { salaId, fecha: fechaQuery, bloque: bloqueQuery } = router.query;
-
+ 
   const [sala, setSala] = useState(null);
   const [fecha, setFecha] = useState(todayISO(0));
   const [disponibilidad, setDisponibilidad] = useState(null);
@@ -19,48 +19,52 @@ export default function Reservar() {
   const [horaFin, setHoraFin] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [confirmacion, setConfirmacion] = useState(null);
-
+ 
   useEffect(() => {
     if (fechaQuery) setFecha(fechaQuery);
   }, [fechaQuery]);
-
+ 
   useEffect(() => {
     if (bloqueQuery !== undefined) setBloqueInicio(Number(bloqueQuery));
   }, [bloqueQuery]);
-
+ 
   useEffect(() => {
     if (!salaId) return;
     api.get('/salas').then((d) => setSala(d.salas.find((s) => s.id === salaId) || null));
   }, [salaId]);
-
+ 
   useEffect(() => {
     if (!salaId || !fecha) return;
     api.get(`/salas/${salaId}/disponibilidad?fecha=${fecha}`).then(setDisponibilidad);
     setBloqueInicio(null);
   }, [salaId, fecha]);
-
+ 
   const bloquesDia = disponibilidad?.bloques || [];
-
+ 
   const bloquesRenderizados = useMemo(() => {
     return bloquesDia.map((b, i) => {
-      let ocupadoSiguiente = false;
+      let deshabilitado = b.pasado || b.ocupado;
+      let finMin = b.end;
       if (duracion === 90) {
         const sig = bloquesDia[i + 1];
-        ocupadoSiguiente = !sig || sig.ocupado;
+        const esAdyacente = sig && sig.start === b.end; // sin recreo entre medio
+        if (!esAdyacente || sig.ocupado || sig.pasado) {
+          deshabilitado = true; // no se puede formar un bloque de 90 min desde aquí
+        } else {
+          finMin = sig.end;
+        }
       }
-      const deshabilitado = b.pasado || b.ocupado || ocupadoSiguiente;
-      const finMin = duracion === 90 && bloquesDia[i + 1] ? bloquesDia[i + 1].end : b.end;
       return { ...b, i, deshabilitado, finMin };
     });
   }, [bloquesDia, duracion]);
-
+ 
   async function confirmar() {
     if (!sala || !disponibilidad?.abierto) {
       showToast('El colegio no tiene jornada ese día.', 'error');
       return;
     }
     let fechaInicioISO, fechaFinISO;
-
+ 
     if (tipoUso === 'clase') {
       const b = bloquesRenderizados[bloqueInicio];
       if (bloqueInicio === null || !b || b.deshabilitado) {
@@ -79,7 +83,7 @@ export default function Reservar() {
       fechaInicioISO = combinarFechaMinutos(fecha, hi * 60 + mi);
       fechaFinISO = combinarFechaMinutos(fecha, hf * 60 + mf);
     }
-
+ 
     setEnviando(true);
     try {
       const data = await api.post('/reservas', {
@@ -95,11 +99,11 @@ export default function Reservar() {
       setEnviando(false);
     }
   }
-
+ 
   if (!sala) return <p className="page-sub">Cargando…</p>;
-
+ 
   const cfg = disponibilidad?.horario;
-
+ 
   return (
     <div>
       <button className="btn btn-ghost btn-sm" style={{ marginBottom: 12 }} onClick={() => router.back()}>← Volver</button>
@@ -107,7 +111,7 @@ export default function Reservar() {
       <p className="page-sub">
         {sala.modoReserva === 'autoservicio' ? 'Esta sala se confirma al instante.' : 'Esta sala requiere aprobación del encargado.'}
       </p>
-
+ 
       <div className="field">
         <label>Tipo de uso</label>
         <div className="segmented">
@@ -115,19 +119,19 @@ export default function Reservar() {
           <button className={tipoUso === 'reunion_otro' ? 'active' : ''} onClick={() => { setTipoUso('reunion_otro'); setBloqueInicio(null); }}>🤝 Reunión / otro</button>
         </div>
       </div>
-
+ 
       <div className="field">
         <label>Fecha</label>
         <input type="date" value={fecha} min={todayISO(0)} max={todayISO(30)} onChange={(e) => setFecha(e.target.value)} />
       </div>
-
+ 
       {disponibilidad && !disponibilidad.abierto && (
         <div className="empty-state">
           <div className="em">🌙</div>
           <p>El colegio no tiene jornada este día. Elige otra fecha.</p>
         </div>
       )}
-
+ 
       {disponibilidad && disponibilidad.abierto && tipoUso === 'clase' && (
         <>
           <div className="field">
@@ -138,7 +142,7 @@ export default function Reservar() {
             </div>
             <p className="hint">Los bloques corresponden a las horas de clase reales de ese día (no incluyen recreos).</p>
           </div>
-
+ 
           {bloquesRenderizados.length === 0 ? (
             <div className="empty-state">
               <div className="em">🕒</div>
@@ -162,7 +166,7 @@ export default function Reservar() {
           )}
         </>
       )}
-
+ 
       {disponibilidad && disponibilidad.abierto && tipoUso === 'reunion_otro' && (
         <>
           <div className="field">
@@ -179,11 +183,11 @@ export default function Reservar() {
           </p>
         </>
       )}
-
+ 
       <button className="btn btn-primary btn-block" style={{ marginTop: 8 }} disabled={enviando} onClick={confirmar}>
         {enviando ? 'Enviando…' : sala.modoReserva === 'autoservicio' ? 'Confirmar reserva' : 'Enviar solicitud'}
       </button>
-
+ 
       {confirmacion && (
         <div className="overlay">
           <div className="modal">
