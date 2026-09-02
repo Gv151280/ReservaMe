@@ -48,7 +48,7 @@ router.get('/', requireAuth, async (req, res) => {
       });
       const ahoraMin = hoy.getHours() * 60 + hoy.getMinutes();
       const bloquesLibres = bloquesHoy.filter((b) => {
-        if (b.end <= ahoraMin) return false; // ya pasó
+        if (b.end <= ahoraMin) return false;
         const bIni = new Date(hoy); bIni.setHours(0, b.start, 0, 0);
         const bFin = new Date(hoy); bFin.setHours(0, b.end, 0, 0);
         return !reservasHoy.some((r) => r.fechaInicio < bFin && r.fechaFin > bIni);
@@ -104,21 +104,29 @@ router.get('/:id/disponibilidad', requireAuth, async (req, res) => {
   });
 });
 
+function normalizarItemsEquipamiento(items) {
+  if (!Array.isArray(items)) return undefined;
+  return items
+    .filter((it) => it && typeof it.nombre === 'string' && it.nombre.trim())
+    .map((it) => ({
+      nombre: it.nombre.trim(),
+      tieneCantidad: Boolean(it.tieneCantidad),
+      cantidadMaxima: it.tieneCantidad && it.cantidadMaxima ? Number(it.cantidadMaxima) : null,
+    }));
+}
+
 // POST /salas [admin]
 router.post('/', requireAuth, requireRole('administrador'), async (req, res) => {
-  const { nombre, capacidad, equipamiento, modoReserva, encargadoId } = req.body;
+  const { nombre, capacidad, equipamiento, encargadoId, itemsEquipamiento } = req.body;
   if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio.' });
-  if (modoReserva === 'con_aprobacion' && !encargadoId) {
-    return res.status(400).json({ error: 'Una sala con aprobación requiere un encargado asignado.' });
-  }
   const sala = await prisma.sala.create({
     data: {
       colegioId: req.user.colegioId,
       nombre,
       capacidad: capacidad ?? null,
       equipamiento: equipamiento ?? null,
-      modoReserva: modoReserva || 'autoservicio',
       encargadoId: encargadoId ?? null,
+      itemsEquipamiento: normalizarItemsEquipamiento(itemsEquipamiento) ?? [],
     },
   });
   res.status(201).json({ sala });
@@ -129,12 +137,8 @@ router.patch('/:id', requireAuth, requireRole('administrador'), async (req, res)
   const sala = await prisma.sala.findFirst({ where: { id: req.params.id, colegioId: req.user.colegioId } });
   if (!sala) return res.status(404).json({ error: 'Sala no encontrada.' });
 
-  const { nombre, capacidad, equipamiento, modoReserva, encargadoId, activa } = req.body;
-  const nuevoModo = modoReserva ?? sala.modoReserva;
-  const nuevoEncargado = encargadoId === undefined ? sala.encargadoId : encargadoId;
-  if (nuevoModo === 'con_aprobacion' && !nuevoEncargado) {
-    return res.status(400).json({ error: 'Una sala con aprobación requiere un encargado asignado.' });
-  }
+  const { nombre, capacidad, equipamiento, encargadoId, activa, itemsEquipamiento } = req.body;
+  const itemsNormalizados = normalizarItemsEquipamiento(itemsEquipamiento);
 
   const actualizada = await prisma.sala.update({
     where: { id: sala.id },
@@ -142,9 +146,9 @@ router.patch('/:id', requireAuth, requireRole('administrador'), async (req, res)
       nombre: nombre ?? sala.nombre,
       capacidad: capacidad === undefined ? sala.capacidad : capacidad,
       equipamiento: equipamiento === undefined ? sala.equipamiento : equipamiento,
-      modoReserva: nuevoModo,
-      encargadoId: nuevoEncargado,
+      encargadoId: encargadoId === undefined ? sala.encargadoId : encargadoId,
       activa: activa === undefined ? sala.activa : activa,
+      itemsEquipamiento: itemsNormalizados === undefined ? sala.itemsEquipamiento : itemsNormalizados,
     },
   });
   res.json({ sala: actualizada });

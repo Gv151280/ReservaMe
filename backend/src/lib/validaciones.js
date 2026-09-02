@@ -45,8 +45,8 @@ function validarAnticipacion(fechaInicio) {
   }
 }
 
-// Regla: tipo_uso determina las reglas de duración (PRD sección 5.1), y ahora
-// también depende del horario institucional configurable por día.
+// Regla: tipo_uso determina las reglas de duración (PRD sección 5.1), y depende
+// del horario institucional configurable por día.
 async function validarTipoUsoYHorario(colegioId, tipoUso, fechaInicio, fechaFin) {
   if (fechaFin <= fechaInicio) {
     throw errorHttp(400, 'La hora de término debe ser posterior al inicio.');
@@ -75,7 +75,7 @@ async function validarTipoUsoYHorario(colegioId, tipoUso, fechaInicio, fechaFin)
     if (!esRangoDeClaseValido(cfg, inicioMin, finMin)) {
       throw errorHttp(
         400,
-        'Para reservas de "Clase" el horario debe calzar exactamente con una hora de clase, o con dos horas consecutivas sin recreo entre medio, según el horario institucional de ese día.'
+        'Para reservas de "Clase" el horario debe calzar exactamente con una hora de clase, o con dos horas consecutivas del día, según el horario institucional de ese día.'
       );
     }
   } else if (tipoUso === 'reunion_otro') {

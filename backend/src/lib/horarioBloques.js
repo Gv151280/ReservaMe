@@ -1,7 +1,11 @@
-// Los bloques de "Clase" ya NO se calculan automáticamente cada 45 min — vienen
-// directo de la lista de horas de clase (BloqueClase) que el Administrador
-// configuró para ese día. Los recreos son, simplemente, los espacios de tiempo
-// que quedan entre una hora y la siguiente.
+// Los bloques de "Clase" vienen directo de la lista de horas de clase
+// (BloqueClase) que el Administrador configuró para ese día. Los recreos son
+// los espacios de tiempo que quedan entre una hora y la siguiente.
+//
+// Regla de 90 min (confirmada con el colegio): un profesor puede reservar dos
+// horas consecutivas seguidas, AUNQUE haya un recreo (corto o de almuerzo) entre
+// medio — la clase se pausa en el recreo y continúa después. La reserva bloquea
+// la sala también durante ese recreo (es un solo tramo continuo).
 
 function pad(n) {
   return n < 10 ? '0' + n : '' + n;
@@ -28,13 +32,14 @@ function bloquesDelDia(cfg) {
 }
 
 // Válido si [inicioMin, finMin) calza EXACTO con una hora de clase (duración simple),
-// o con dos horas consecutivas sin recreo entre ellas (duración doble, ej. 90 min).
+// o con DOS horas consecutivas en el orden del día (la que sigue cronológicamente,
+// haya o no recreo entre ellas) — duración doble.
 function esRangoDeClaseValido(cfg, inicioMin, finMin) {
   const bloques = bloquesDelDia(cfg);
-  return bloques.some((b) => {
+  return bloques.some((b, i) => {
     if (b.start === inicioMin && b.end === finMin) return true; // 1 hora exacta
     if (b.start !== inicioMin) return false;
-    const siguiente = bloques.find((x) => x.start === b.end); // sin recreo entre medio
+    const siguiente = bloques[i + 1]; // la hora que le sigue en el día (con o sin recreo entre medio)
     return siguiente && siguiente.end === finMin; // 2 horas consecutivas exactas
   });
 }

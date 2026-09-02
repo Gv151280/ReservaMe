@@ -5,6 +5,8 @@ import StickerIcon, { GLYPH } from '../../components/StickerIcon';
 
 const TONOS_POR_NOMBRE = { 'Sala de Proyectos': 'blue', CRA: 'green' };
 
+function itemVacio() { return { nombre: '', tieneCantidad: false, cantidadMaxima: '' }; }
+
 export default function AdminSalas() {
   const { showToast } = useToast();
   const [salas, setSalas] = useState(null);
@@ -24,8 +26,10 @@ export default function AdminSalas() {
       nombre: sala.nombre,
       capacidad: sala.capacidad ?? '',
       equipamiento: sala.equipamiento ?? '',
-      modoReserva: sala.modoReserva,
       encargadoId: sala.encargadoId ?? '',
+      items: (sala.itemsEquipamiento && sala.itemsEquipamiento.length > 0
+        ? sala.itemsEquipamiento.map((it) => ({ ...it, cantidadMaxima: it.cantidadMaxima ?? '' }))
+        : [itemVacio()]),
     });
   }
 
@@ -39,14 +43,22 @@ export default function AdminSalas() {
   }
 
   async function guardarBorrador() {
+    const itemsLimpios = borrador.items
+      .filter((it) => it.nombre.trim())
+      .map((it) => ({
+        nombre: it.nombre.trim(),
+        tieneCantidad: it.tieneCantidad,
+        cantidadMaxima: it.tieneCantidad && it.cantidadMaxima ? Number(it.cantidadMaxima) : null,
+      }));
     await guardarCampo(editandoId, {
       nombre: borrador.nombre,
       capacidad: borrador.capacidad === '' ? null : Number(borrador.capacidad),
       equipamiento: borrador.equipamiento,
-      modoReserva: borrador.modoReserva,
       encargadoId: borrador.encargadoId || null,
+      itemsEquipamiento: itemsLimpios,
     });
     setEditandoId(null);
+    cargar();
   }
 
   async function toggleActiva(sala) {
@@ -56,7 +68,7 @@ export default function AdminSalas() {
 
   async function crearSala() {
     try {
-      const data = await api.post('/salas', { nombre: 'Nueva sala', capacidad: 10, equipamiento: 'Por definir', modoReserva: 'autoservicio' });
+      const data = await api.post('/salas', { nombre: 'Nueva sala', capacidad: 10, equipamiento: 'Por definir' });
       setSalas((prev) => [...prev, data.sala]);
       abrirEdicion(data.sala);
     } catch (err) {
@@ -64,12 +76,26 @@ export default function AdminSalas() {
     }
   }
 
+  function actualizarItem(index, campo, valor) {
+    setBorrador((prev) => {
+      const items = [...prev.items];
+      items[index] = { ...items[index], [campo]: valor };
+      return { ...prev, items };
+    });
+  }
+  function agregarItem() {
+    setBorrador((prev) => ({ ...prev, items: [...prev.items, itemVacio()] }));
+  }
+  function quitarItem(index) {
+    setBorrador((prev) => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }));
+  }
+
   if (salas === null) return <p className="page-sub">Cargando…</p>;
 
   return (
     <div>
       <h1 className="page-title">Gestión de salas</h1>
-      <p className="page-sub">Crea salas, define su modo de reserva y asigna encargados.</p>
+      <p className="page-sub">Crea salas, define el encargado y los equipos que se pueden pedir al reservarlas.</p>
 
       {salas.map((sala) => (
         <div className="admin-card" key={sala.id}>
@@ -81,10 +107,13 @@ export default function AdminSalas() {
             </button>
           </div>
           <p className="sala-meta">Capacidad {sala.capacidad ?? '—'} · {sala.equipamiento || 'Sin equipamiento'}</p>
-          <div className="toggle-row"><span>Modo de reserva</span><b>{sala.modoReserva === 'autoservicio' ? 'Autoservicio' : 'Con aprobación'}</b></div>
           <div className="toggle-row">
             <span>Encargado</span>
-            <b>{sala.encargado?.nombre || '— sin asignar'}</b>
+            <b>{sala.encargado?.nombre || '— sin asignar (aprueban los administradores)'}</b>
+          </div>
+          <div className="toggle-row">
+            <span>Equipos configurables</span>
+            <b>{(sala.itemsEquipamiento || []).length}</b>
           </div>
           <div className="toggle-row">
             <span>Activa</span>
@@ -102,25 +131,47 @@ export default function AdminSalas() {
                 <input type="number" value={borrador.capacidad} onChange={(e) => setBorrador({ ...borrador, capacidad: e.target.value })} />
               </div>
               <div className="field">
-                <label>Equipamiento</label>
+                <label>Equipamiento (texto descriptivo)</label>
                 <input type="text" value={borrador.equipamiento} onChange={(e) => setBorrador({ ...borrador, equipamiento: e.target.value })} />
               </div>
               <div className="field">
-                <label>Modo de reserva</label>
-                <select value={borrador.modoReserva} onChange={(e) => setBorrador({ ...borrador, modoReserva: e.target.value })}>
-                  <option value="autoservicio">Autoservicio</option>
-                  <option value="con_aprobacion">Con aprobación</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>Encargado</label>
+                <label>Encargado (aprueba las reservas de "Reunión/otro" de esta sala)</label>
                 <select value={borrador.encargadoId} onChange={(e) => setBorrador({ ...borrador, encargadoId: e.target.value })}>
-                  <option value="">— sin asignar —</option>
+                  <option value="">— sin asignar (aprueban los administradores) —</option>
                   {usuarios.map((u) => (
                     <option key={u.id} value={u.id}>{u.nombre}</option>
                   ))}
                 </select>
               </div>
+
+              <div className="section-label">Equipos que se pueden pedir al reservar</div>
+              {borrador.items.map((it, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+                  <input
+                    type="text"
+                    placeholder="Ej: Notebooks"
+                    value={it.nombre}
+                    onChange={(e) => actualizarItem(i, 'nombre', e.target.value)}
+                    style={{ flex: 2, minWidth: 120 }}
+                  />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                    <input type="checkbox" checked={it.tieneCantidad} onChange={(e) => actualizarItem(i, 'tieneCantidad', e.target.checked)} />
+                    Tiene cantidad
+                  </label>
+                  {it.tieneCantidad && (
+                    <input
+                      type="number"
+                      placeholder="Máximo"
+                      value={it.cantidadMaxima}
+                      onChange={(e) => actualizarItem(i, 'cantidadMaxima', e.target.value)}
+                      style={{ width: 90 }}
+                    />
+                  )}
+                  <button className="btn btn-coral btn-sm" onClick={() => quitarItem(i)}>✕</button>
+                </div>
+              ))}
+              <button className="btn btn-ghost btn-sm" onClick={agregarItem} style={{ marginBottom: 12 }}>+ Agregar equipo</button>
+
               <button className="btn btn-secondary btn-block" onClick={guardarBorrador}>Guardar</button>
             </div>
           )}

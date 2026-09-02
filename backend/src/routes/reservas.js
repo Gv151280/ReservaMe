@@ -48,12 +48,39 @@ router.get('/pendientes', requireAuth, async (req, res) => {
   res.json({ reservas });
 });
 
+// Filtra el equipamiento pedido para que solo queden ítems que la sala realmente
+// ofrece, y que el número pedido no supere el máximo configurado.
+function filtrarEquipamiento(itemsSala, solicitado) {
+  if (!Array.isArray(solicitado)) return [];
+  const porNombre = new Map((itemsSala || []).map((it) => [it.nombre, it]));
+  const resultado = [];
+  for (const pedido of solicitado) {
+    const item = porNombre.get(pedido?.nombre);
+    if (!item) continue; // ítem que la sala no ofrece -> se ignora en silencio
+    if (item.tieneCantidad) {
+      let cantidad = Number(pedido.cantidad);
+      if (!Number.isFinite(cantidad) || cantidad <= 0) continue;
+      if (item.cantidadMaxima) cantidad = Math.min(cantidad, item.cantidadMaxima);
+      resultado.push({ nombre: item.nombre, cantidad });
+    } else {
+      resultado.push({ nombre: item.nombre });
+    }
+  }
+  return resultado;
+}
+
 // POST /reservas -> crea la reserva validando TODAS las reglas de negocio del backend.
+// body: { salaId, tipoUso, fechaInicio, fechaFin, equipamientoSolicitado?: [{nombre, cantidad?}] }
+// El estado (confirmada/pendiente) depende SOLO de tipoUso: "clase" siempre es
+// automática, "reunion_otro" siempre requiere aprobación — sin importar la sala.
 router.post('/', requireAuth, async (req, res) => {
   try {
-    const { salaId, tipoUso, fechaInicio, fechaFin } = req.body;
+    const { salaId, tipoUso, fechaInicio, fechaFin, equipamientoSolicitado } = req.body;
     if (!salaId || !tipoUso || !fechaInicio || !fechaFin) {
       throw errorHttp(400, 'Faltan campos: salaId, tipoUso, fechaInicio, fechaFin.');
+    }
+    if (!['clase', 'reunion_otro'].includes(tipoUso)) {
+      throw errorHttp(400, 'tipo_uso inválido: debe ser "clase" o "reunion_otro".');
     }
 
     const sala = await prisma.sala.findFirst({ where: { id: salaId, colegioId: req.user.colegioId, activa: true } });
@@ -66,7 +93,8 @@ router.post('/', requireAuth, async (req, res) => {
     await validarTipoUsoYHorario(req.user.colegioId, tipoUso, inicio, fin);
     await validarSinSolape(salaId, inicio, fin);
 
-    const estado = sala.modoReserva === 'autoservicio' ? 'confirmada' : 'pendiente';
+    const equipamiento = filtrarEquipamiento(sala.itemsEquipamiento, equipamientoSolicitado);
+    const estado = tipoUso === 'clase' ? 'confirmada' : 'pendiente';
 
     const reserva = await prisma.reserva.create({
       data: {
@@ -76,6 +104,7 @@ router.post('/', requireAuth, async (req, res) => {
         fechaInicio: inicio,
         fechaFin: fin,
         estado,
+        equipamientoSolicitado: equipamiento,
       },
     });
 
@@ -99,7 +128,6 @@ router.patch('/:id/aprobar', requireAuth, async (req, res) => {
     if (!puedeGestionarSala(req.user, reserva.sala)) throw errorHttp(403, 'No tienes permiso para gestionar esta sala.');
     if (reserva.estado !== 'pendiente') throw errorHttp(400, 'Solo se pueden aprobar reservas pendientes.');
 
-    // Revalidar solapamiento al momento de aprobar por si algo cambió mientras esperaba.
     await validarSinSolape(reserva.salaId, reserva.fechaInicio, reserva.fechaFin, reserva.id);
 
     const actualizada = await prisma.reserva.update({ where: { id: reserva.id }, data: { estado: 'confirmada' } });

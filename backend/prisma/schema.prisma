@@ -1,9 +1,7 @@
 // Modelo de datos de ReservaMe — Fase -1
-// Basado en Documento-Tecnico-ReservaMe-Fase1.md, sección 3.
-// Se agrega HorarioInstitucional + BloqueClase (no estaban en el doc original)
-// para permitir que el Administrador configure, por día de la semana, las horas
-// de clase reales (con recreos de duración variable entre ellas) y hasta qué hora
-// quedan encargados/profesores en el colegio.
+// Basado en Documento-Tecnico-ReservaMe-Fase1.md, sección 3, más las extensiones
+// acordadas después: horario con horas de clase reales (BloqueClase), equipamiento
+// configurable por sala y solicitado por reserva.
 
 generator client {
   provider = "prisma-client-js"
@@ -60,35 +58,42 @@ model UsuarioRol {
   @@map("usuario_rol")
 }
 
+// itemsEquipamiento: lista de equipos que se pueden pedir al reservar esta sala.
+// Cada ítem: { "nombre": "Notebooks", "tieneCantidad": true, "cantidadMaxima": 20 }
+// (tieneCantidad=false para ítems de sí/no, como "Proyector" o "Audio").
 model Sala {
-  id           String   @id @default(uuid())
-  colegioId    String   @map("colegio_id")
-  colegio      Colegio  @relation(fields: [colegioId], references: [id])
-  nombre       String
-  capacidad    Int?
-  equipamiento String?
-  modoReserva  String   @default("autoservicio") @map("modo_reserva") // autoservicio | con_aprobacion
-  encargadoId  String?  @map("encargado_id")
-  encargado    Usuario? @relation("EncargadoSala", fields: [encargadoId], references: [id])
-  activa       Boolean  @default(true)
+  id                String   @id @default(uuid())
+  colegioId         String   @map("colegio_id")
+  colegio           Colegio  @relation(fields: [colegioId], references: [id])
+  nombre            String
+  capacidad         Int?
+  equipamiento      String?
+  modoReserva       String   @default("autoservicio") @map("modo_reserva") // ya no se usa para decidir aprobación (ver Reserva.estado), se deja por compatibilidad
+  itemsEquipamiento Json     @default("[]") @map("items_equipamiento")
+  encargadoId       String?  @map("encargado_id")
+  encargado         Usuario? @relation("EncargadoSala", fields: [encargadoId], references: [id])
+  activa            Boolean  @default(true)
 
   reservas Reserva[]
 
   @@map("sala")
 }
 
+// equipamientoSolicitado: lo que el docente pidió en ESA reserva puntual.
+// [{ "nombre": "Notebooks", "cantidad": 10 }, { "nombre": "Proyector" }]
 model Reserva {
-  id             String    @id @default(uuid())
-  salaId         String    @map("sala_id")
-  sala           Sala      @relation(fields: [salaId], references: [id])
-  usuarioId      String    @map("usuario_id")
-  usuario        Usuario   @relation(fields: [usuarioId], references: [id])
-  tipoUso        String    @map("tipo_uso") // clase | reunion_otro
-  fechaInicio    DateTime  @map("fecha_inicio")
-  fechaFin       DateTime  @map("fecha_fin")
-  estado         String    @default("pendiente") // pendiente | confirmada | rechazada | cancelada
-  motivoRechazo  String?   @map("motivo_rechazo")
-  creadoEn       DateTime  @default(now()) @map("creado_en")
+  id                     String   @id @default(uuid())
+  salaId                 String   @map("sala_id")
+  sala                   Sala     @relation(fields: [salaId], references: [id])
+  usuarioId              String   @map("usuario_id")
+  usuario                Usuario  @relation(fields: [usuarioId], references: [id])
+  tipoUso                String   @map("tipo_uso") // clase | reunion_otro
+  fechaInicio            DateTime @map("fecha_inicio")
+  fechaFin               DateTime @map("fecha_fin")
+  estado                 String   @default("pendiente") // pendiente | confirmada | rechazada | cancelada
+  motivoRechazo          String?  @map("motivo_rechazo")
+  equipamientoSolicitado Json     @default("[]") @map("equipamiento_solicitado")
+  creadoEn               DateTime @default(now()) @map("creado_en")
 
   notificaciones Notificacion[]
 
@@ -116,7 +121,6 @@ model Notificacion {
 // El Administrador define la lista real de horas de clase de cada día — cada una
 // con su propio inicio y fin — y los recreos quedan implícitos como los espacios
 // entre una hora y la siguiente (pueden durar distinto entre sí).
-// horaInicio / horaSalidaProfesores se guardan en minutos desde las 00:00 (08:00 = 480).
 model HorarioInstitucional {
   id                   String  @id @default(uuid())
   colegioId            String  @map("colegio_id")
@@ -133,8 +137,6 @@ model HorarioInstitucional {
 }
 
 // Una hora de clase real dentro de un día del horario institucional.
-// Las reservas de tipo "clase" deben calzar exactamente con una de estas horas,
-// o con dos horas consecutivas (sin recreo entre ellas) para una reserva de 90 min.
 model BloqueClase {
   id         String               @id @default(uuid())
   horarioId  String               @map("horario_id")
