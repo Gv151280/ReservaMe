@@ -30,6 +30,18 @@ async function validarSinSolape(salaId, fechaInicio, fechaFin, excluirReservaId)
   if (solapadas.length > 0) {
     throw errorHttp(409, 'Ese horario ya no está disponible. Elige otro bloque u horario.');
   }
+
+  const bloqueo = await prisma.bloqueo.findFirst({
+    where: {
+      salaId,
+      activo: true,
+      fechaInicio: { lt: fechaFin },
+      fechaFin: { gt: fechaInicio },
+    },
+  });
+  if (bloqueo) {
+    throw errorHttp(409, `La sala está bloqueada en ese horario: ${bloqueo.motivo}`);
+  }
 }
 
 // Regla: no se puede reservar con más de 1 mes de anticipación (ni en el pasado).
@@ -106,10 +118,20 @@ function puedeGestionarSala(usuario, sala) {
   return esAdmin || esEncargado;
 }
 
-// Regla: un usuario solo puede cancelar sus propias reservas (o un Administrador cualquiera).
+// Regla: un usuario solo puede cancelar sus propias reservas. Un Administrador
+// o un Directivo (Jefe de UTP) pueden cancelar (anular) la de cualquier docente,
+// en cualquier sala.
 function puedeCancelar(usuario, reserva) {
   const esAdmin = usuario.roles.includes('administrador');
-  return esAdmin || reserva.usuarioId === usuario.id;
+  const esDirectivo = usuario.roles.includes('directivo');
+  return esAdmin || esDirectivo || reserva.usuarioId === usuario.id;
+}
+
+// Regla: un Administrador puede revertir cualquier bloqueo; un Directivo solo
+// puede revertir los que él mismo creó.
+function puedeRevertirBloqueo(usuario, bloqueo) {
+  const esAdmin = usuario.roles.includes('administrador');
+  return esAdmin || bloqueo.creadoPorId === usuario.id;
 }
 
 module.exports = {
@@ -120,4 +142,5 @@ module.exports = {
   validarTipoUsoYHorario,
   puedeGestionarSala,
   puedeCancelar,
+  puedeRevertirBloqueo,
 };

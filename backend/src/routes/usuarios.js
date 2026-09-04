@@ -28,7 +28,7 @@ router.patch('/:id/roles', requireAuth, requireRole('administrador'), async (req
   const { roles } = req.body;
   if (!Array.isArray(roles)) return res.status(400).json({ error: 'roles debe ser un arreglo de strings.' });
 
-  const rolesValidos = ['docente', 'encargado_sala', 'administrador'];
+  const rolesValidos = ['docente', 'encargado_sala', 'directivo', 'administrador'];
   const invalidos = roles.filter((r) => !rolesValidos.includes(r));
   if (invalidos.length) return res.status(400).json({ error: `Roles inválidos: ${invalidos.join(', ')}` });
 

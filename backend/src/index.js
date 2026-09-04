@@ -9,6 +9,7 @@ const reservasRoutes = require('./routes/reservas');
 const usuariosRoutes = require('./routes/usuarios');
 const horarioRoutes = require('./routes/horario');
 const notificacionesRoutes = require('./routes/notificaciones');
+const bloqueosRoutes = require('./routes/bloqueos');
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use('/reservas', reservasRoutes);
 app.use('/usuarios', usuariosRoutes);
 app.use('/horario', horarioRoutes);
 app.use('/notificaciones', notificacionesRoutes);
+app.use('/bloqueos', bloqueosRoutes);
 
 // Manejador de errores genérico (por si algo se escapa de los try/catch de las rutas).
 app.use((err, req, res, next) => {

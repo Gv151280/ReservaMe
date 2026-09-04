@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import { useToast } from '../../components/Toast';
 
-const ROLES = ['docente', 'encargado_sala', 'administrador'];
-const LABELS = { docente: 'Docente', encargado_sala: 'Encargado de sala', administrador: 'Administrador' };
+const ROLES = ['docente', 'encargado_sala', 'directivo', 'administrador'];
+const LABELS = { docente: 'Docente', encargado_sala: 'Encargado de sala', directivo: 'Directivo (Jefe UTP)', administrador: 'Administrador' };
 
 function initials(nombre) {
   return nombre.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();

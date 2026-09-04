@@ -8,7 +8,7 @@ require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-const ROLES = ['docente', 'encargado_sala', 'administrador'];
+const ROLES = ['docente', 'encargado_sala', 'directivo', 'administrador'];
 
 // lunes=1 ... sábado=6, domingo=0 (getDay() de JS)
 // Horario real del colegio: 9 horas de clase de 45 min cada una, con 4 recreos

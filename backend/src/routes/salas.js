@@ -46,12 +46,17 @@ router.get('/', requireAuth, async (req, res) => {
           fechaFin: { gt: inicio },
         },
       });
+      const bloqueosHoy = await prisma.bloqueo.findMany({
+        where: { salaId: sala.id, activo: true, fechaInicio: { lt: fin }, fechaFin: { gt: inicio } },
+      });
       const ahoraMin = hoy.getHours() * 60 + hoy.getMinutes();
       const bloquesLibres = bloquesHoy.filter((b) => {
         if (b.end <= ahoraMin) return false;
         const bIni = new Date(hoy); bIni.setHours(0, b.start, 0, 0);
         const bFin = new Date(hoy); bFin.setHours(0, b.end, 0, 0);
-        return !reservasHoy.some((r) => r.fechaInicio < bFin && r.fechaFin > bIni);
+        const ocupadoPorReserva = reservasHoy.some((r) => r.fechaInicio < bFin && r.fechaFin > bIni);
+        const ocupadoPorBloqueo = bloqueosHoy.some((bl) => bl.fechaInicio < bFin && bl.fechaFin > bIni);
+        return !ocupadoPorReserva && !ocupadoPorBloqueo;
       });
 
       return { ...sala, bloquesLibresHoy: bloquesLibres.length, totalBloquesHoy: bloquesHoy.length };
@@ -84,14 +89,18 @@ router.get('/:id/disponibilidad', requireAuth, async (req, res) => {
       fechaFin: { gt: inicio },
     },
   });
+  const bloqueos = await prisma.bloqueo.findMany({
+    where: { salaId: sala.id, activo: true, fechaInicio: { lt: fin }, fechaFin: { gt: inicio } },
+  });
 
   const [y, m, d] = fechaISO.split('-').map(Number);
   const bloquesConEstado = bloques.map((b) => {
     const bIni = new Date(y, m - 1, d, 0, b.start, 0, 0);
     const bFin = new Date(y, m - 1, d, 0, b.end, 0, 0);
-    const ocupado = reservas.some((r) => r.fechaInicio < bFin && r.fechaFin > bIni);
+    const bloqueoQueAplica = bloqueos.find((bl) => bl.fechaInicio < bFin && bl.fechaFin > bIni);
+    const ocupado = Boolean(bloqueoQueAplica) || reservas.some((r) => r.fechaInicio < bFin && r.fechaFin > bIni);
     const pasado = bFin <= new Date();
-    return { ...b, ocupado, pasado };
+    return { ...b, ocupado, pasado, motivoBloqueo: bloqueoQueAplica ? bloqueoQueAplica.motivo : null };
   });
 
   res.json({
@@ -132,25 +141,37 @@ router.post('/', requireAuth, requireRole('administrador'), async (req, res) => 
   res.status(201).json({ sala });
 });
 
-// PATCH /salas/:id [admin]
-router.patch('/:id', requireAuth, requireRole('administrador'), async (req, res) => {
+// PATCH /salas/:id [admin: todo el sala; encargado de esa sala: SOLO itemsEquipamiento/equipamiento]
+router.patch('/:id', requireAuth, async (req, res) => {
   const sala = await prisma.sala.findFirst({ where: { id: req.params.id, colegioId: req.user.colegioId } });
   if (!sala) return res.status(404).json({ error: 'Sala no encontrada.' });
+
+  const esAdmin = req.user.roles.includes('administrador');
+  const esEncargadoDeEstaSala = sala.encargadoId === req.user.id;
+  if (!esAdmin && !esEncargadoDeEstaSala) {
+    return res.status(403).json({ error: 'No tienes permiso para editar esta sala.' });
+  }
 
   const { nombre, capacidad, equipamiento, encargadoId, activa, itemsEquipamiento } = req.body;
   const itemsNormalizados = normalizarItemsEquipamiento(itemsEquipamiento);
 
-  const actualizada = await prisma.sala.update({
-    where: { id: sala.id },
-    data: {
-      nombre: nombre ?? sala.nombre,
-      capacidad: capacidad === undefined ? sala.capacidad : capacidad,
-      equipamiento: equipamiento === undefined ? sala.equipamiento : equipamiento,
-      encargadoId: encargadoId === undefined ? sala.encargadoId : encargadoId,
-      activa: activa === undefined ? sala.activa : activa,
-      itemsEquipamiento: itemsNormalizados === undefined ? sala.itemsEquipamiento : itemsNormalizados,
-    },
-  });
+  // Un Encargado (no admin) solo puede tocar el equipamiento de su sala — el resto
+  // de los campos (nombre, capacidad, quién es el encargado, activa) son solo del Admin.
+  const data = esAdmin
+    ? {
+        nombre: nombre ?? sala.nombre,
+        capacidad: capacidad === undefined ? sala.capacidad : capacidad,
+        equipamiento: equipamiento === undefined ? sala.equipamiento : equipamiento,
+        encargadoId: encargadoId === undefined ? sala.encargadoId : encargadoId,
+        activa: activa === undefined ? sala.activa : activa,
+        itemsEquipamiento: itemsNormalizados === undefined ? sala.itemsEquipamiento : itemsNormalizados,
+      }
+    : {
+        equipamiento: equipamiento === undefined ? sala.equipamiento : equipamiento,
+        itemsEquipamiento: itemsNormalizados === undefined ? sala.itemsEquipamiento : itemsNormalizados,
+      };
+
+  const actualizada = await prisma.sala.update({ where: { id: sala.id }, data });
   res.json({ sala: actualizada });
 });
 

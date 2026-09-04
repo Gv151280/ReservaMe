@@ -36,6 +36,8 @@ model Usuario {
   reservas        Reserva[]
   salasEncargadas Sala[]         @relation("EncargadoSala")
   notificaciones  Notificacion[]
+  bloqueosCreados    Bloqueo[] @relation("BloqueoCreadoPor")
+  bloqueosRevertidos Bloqueo[] @relation("BloqueoRevertidoPor")
 
   @@map("usuario")
 }
@@ -75,6 +77,7 @@ model Sala {
   activa            Boolean  @default(true)
 
   reservas Reserva[]
+  bloqueos Bloqueo[]
 
   @@map("sala")
 }
@@ -157,4 +160,29 @@ model MagicLinkToken {
   creadoEn  DateTime  @default(now()) @map("creado_en")
 
   @@map("magic_link_token")
+}
+
+// Bloqueo de sala: creado por un Directivo (Jefe de UTP) o un Administrador para
+// impedir reservas en una sala durante un rango de tiempo (horas, días, semanas),
+// con un motivo obligatorio que ven los docentes. Mientras está activo, cuenta
+// como ocupación de la sala (igual que una reserva) para efectos de disponibilidad
+// y solapamiento. Un Administrador puede revertir (desactivar) cualquier bloqueo;
+// un Directivo solo puede revertir los que él mismo creó.
+model Bloqueo {
+  id             String    @id @default(uuid())
+  salaId         String    @map("sala_id")
+  sala           Sala      @relation(fields: [salaId], references: [id])
+  creadoPorId    String    @map("creado_por_id")
+  creadoPor      Usuario   @relation("BloqueoCreadoPor", fields: [creadoPorId], references: [id])
+  fechaInicio    DateTime  @map("fecha_inicio")
+  fechaFin       DateTime  @map("fecha_fin")
+  motivo         String
+  activo         Boolean   @default(true)
+  revertidoPorId String?   @map("revertido_por_id")
+  revertidoPor   Usuario?  @relation("BloqueoRevertidoPor", fields: [revertidoPorId], references: [id])
+  revertidoEn    DateTime? @map("revertido_en")
+  creadoEn       DateTime  @default(now()) @map("creado_en")
+
+  @@index([salaId, fechaInicio, fechaFin])
+  @@map("bloqueo")
 }

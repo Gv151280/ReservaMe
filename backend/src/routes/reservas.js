@@ -1,6 +1,7 @@
 const express = require('express');
 const prisma = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const requireRole = require('../middleware/requireRole');
 const {
   errorHttp,
   validarSinSolape,
@@ -10,6 +11,7 @@ const {
   puedeCancelar,
 } = require('../lib/validaciones');
 const {
+  crearNotificacion,
   notificarReservaPendiente,
   notificarReservaConfirmada,
   notificarReservaAprobada,
@@ -42,6 +44,20 @@ router.get('/pendientes', requireAuth, async (req, res) => {
 
   const reservas = await prisma.reserva.findMany({
     where: { salaId: { in: salaIds }, estado: 'pendiente' },
+    include: { sala: true, usuario: { select: { id: true, nombre: true, emailInstitucional: true } } },
+    orderBy: { fechaInicio: 'asc' },
+  });
+  res.json({ reservas });
+});
+
+// GET /reservas/todas [directivo o admin] -> todas las reservas activas del colegio
+// (para poder ubicar y anular la de cualquier docente, en cualquier sala).
+router.get('/todas', requireAuth, requireRole('directivo', 'administrador'), async (req, res) => {
+  const reservas = await prisma.reserva.findMany({
+    where: {
+      sala: { colegioId: req.user.colegioId },
+      estado: { in: ['pendiente', 'confirmada'] },
+    },
     include: { sala: true, usuario: { select: { id: true, nombre: true, emailInstitucional: true } } },
     orderBy: { fechaInicio: 'asc' },
   });
@@ -160,7 +176,7 @@ router.patch('/:id/rechazar', requireAuth, async (req, res) => {
 // DELETE /reservas/:id -> cancelar (propia, o admin).
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
-    const reserva = await prisma.reserva.findUnique({ where: { id: req.params.id } });
+    const reserva = await prisma.reserva.findUnique({ where: { id: req.params.id }, include: { sala: true } });
     if (!reserva) throw errorHttp(404, 'Reserva no encontrada.');
     if (!puedeCancelar(req.user, reserva)) throw errorHttp(403, 'Solo puedes cancelar tus propias reservas.');
     if (!['pendiente', 'confirmada'].includes(reserva.estado)) {
@@ -168,6 +184,14 @@ router.delete('/:id', requireAuth, async (req, res) => {
     }
 
     const actualizada = await prisma.reserva.update({ where: { id: reserva.id }, data: { estado: 'cancelada' } });
+
+    // Si quien cancela no es el dueño de la reserva (un Admin o Directivo la anuló), avisarle.
+    if (reserva.usuarioId !== req.user.id) {
+      const mensaje = `${req.user.nombre} anuló tu reserva de ${reserva.sala.nombre} del ${new Date(reserva.fechaInicio).toLocaleDateString('es-CL')}.`;
+      await crearNotificacion({ reservaId: reserva.id, destinatarioId: reserva.usuarioId, canal: 'push', mensaje });
+      await crearNotificacion({ reservaId: reserva.id, destinatarioId: reserva.usuarioId, canal: 'email', mensaje });
+    }
+
     res.json({ reserva: actualizada });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
