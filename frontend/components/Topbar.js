@@ -4,8 +4,17 @@ import LogoMark from './LogoMark';
 import { api } from '../lib/api';
 import { useSession } from '../lib/useSession';
 
+const ROL_LABEL = { docente: 'Docente', encargado_sala: 'Encargado de sala', directivo: 'Directivo (Jefe UTP)', administrador: 'Administrador' };
+// Orden de importancia para mostrar primero el rol más relevante si tiene varios.
+const ORDEN_ROLES = ['administrador', 'directivo', 'encargado_sala', 'docente'];
+
 function initials(nombre) {
   return nombre.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+}
+
+function rolesTexto(roles) {
+  const ordenados = ORDEN_ROLES.filter((r) => roles.includes(r));
+  return ordenados.map((r) => ROL_LABEL[r] || r).join(' · ');
 }
 
 export default function Topbar() {
@@ -36,13 +45,13 @@ export default function Topbar() {
       <LogoMark />
       <div>
         <div className="brand-title">ReservaMe</div>
-        <div className="brand-sub">{user.nombre}</div>
+        <div className="brand-sub">{user.nombre} · <b style={{ color: 'var(--purple-dark)' }}>{rolesTexto(user.roles)}</b></div>
       </div>
       <div className="topbar-actions">
         <button className="bell-btn" onClick={toggle} aria-label="Notificaciones">
           🔔{noLeidas > 0 && <span className="bell-dot" />}
         </button>
-        <div className="avatar" title={user.email} onClick={() => logout().then(() => router.push('/login'))} style={{ cursor: 'pointer' }}>
+        <div className="avatar" title={`${user.email} — clic para cerrar sesión`} onClick={() => logout().then(() => router.push('/login'))} style={{ cursor: 'pointer' }}>
           {initials(user.nombre)}
         </div>
       </div>
