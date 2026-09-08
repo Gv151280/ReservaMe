@@ -11,7 +11,6 @@ const horarioRoutes = require('./routes/horario');
 const notificacionesRoutes = require('./routes/notificaciones');
 const bloqueosRoutes = require('./routes/bloqueos');
 const colegioRoutes = require('./routes/colegio');
-     ...
      app.use('/colegio', colegioRoutes);
 
 const app = express();
