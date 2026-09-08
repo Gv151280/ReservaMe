@@ -98,6 +98,7 @@ export default function BottomNav() {
     items.push({ href: '/admin/salas', label: 'Salas', icon: 'door' });
     items.push({ href: '/admin/horario', label: 'Horario', icon: 'clock' });
     items.push({ href: '/admin/usuarios', label: 'Usuarios', icon: 'users' });
+    items.push({ href: '/admin/colegio', label: 'Colegio', icon: 'door' });
   }
 
   return (

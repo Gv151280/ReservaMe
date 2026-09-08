@@ -56,4 +56,39 @@ router.patch('/:id/roles', requireAuth, requireRole('administrador'), async (req
   });
 });
 
+const FUNCION_A_ROL = { docente: 'docente', encargado: 'encargado_sala', directivo: 'directivo', administrador: 'administrador' };
+
+// POST /usuarios/importar [admin]  { filas: [{nombre, email, funcion}] }
+// Crea usuarios que aún no existen (por correo), con el rol según "función".
+// No toca usuarios que ya existan (para no pisar roles asignados a mano).
+router.post('/importar', requireAuth, requireRole('administrador'), async (req, res) => {
+  const filas = Array.isArray(req.body.filas) ? req.body.filas : [];
+  const rolesDb = await prisma.rol.findMany();
+  const rolIdPorNombre = Object.fromEntries(rolesDb.map((r) => [r.nombre, r.id]));
+
+  let creados = 0, existentes = 0, errores = [];
+  for (const fila of filas) {
+    const email = (fila.email || '').trim().toLowerCase();
+    const nombre = (fila.nombre || '').trim();
+    const funcionKey = (fila.funcion || '').trim().toLowerCase().replace(/[^a-z]/g, '');
+    const rolNombre = FUNCION_A_ROL[funcionKey];
+    if (!email || !nombre) { errores.push(`Fila sin nombre o correo: ${JSON.stringify(fila)}`); continue; }
+    if (!rolNombre) { errores.push(`Función no reconocida para ${email}: "${fila.funcion}"`); continue; }
+
+    const yaExiste = await prisma.usuario.findUnique({ where: { emailInstitucional: email } });
+    if (yaExiste) { existentes++; continue; }
+
+    await prisma.usuario.create({
+      data: {
+        colegioId: req.user.colegioId,
+        nombre,
+        emailInstitucional: email,
+        roles: { create: [{ rolId: rolIdPorNombre[rolNombre] }] },
+      },
+    });
+    creados++;
+  }
+  res.json({ creados, existentes, errores });
+});
+
 module.exports = router;

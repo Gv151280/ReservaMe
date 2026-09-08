@@ -35,28 +35,11 @@ router.get('/callback', async (req, res) => {
     });
 
     if (!usuario) {
-      const colegio = await prisma.colegio.findFirst();
-      if (!colegio) throw Object.assign(new Error('No hay colegio configurado. Ejecuta el seed primero.'), { status: 500 });
-
-      const rolDocente = await prisma.rol.findUnique({ where: { nombre: 'docente' } });
-      usuario = await prisma.usuario.create({
-        data: {
-          colegioId: colegio.id,
-          nombre: email.split('@')[0],
-          emailInstitucional: email,
-          entraIdOid: entraIdOid || null,
-          roles: { create: [{ rolId: rolDocente.id }] },
-        },
-        include: { roles: { include: { rol: true } } },
-      });
-    } else if (entraIdOid && !usuario.entraIdOid) {
-      // Migración Plan B -> Plan A: vincula el oid la primera vez que llega por Entra ID.
-      usuario = await prisma.usuario.update({
-        where: { id: usuario.id },
-        data: { entraIdOid },
-        include: { roles: { include: { rol: true } } },
-      });
-    }
+       throw Object.assign(
+         new Error('Tu correo no está autorizado. Contacta al administrador del colegio.'),
+         { status: 403 }
+       );
+     }
 
     const token = firmarSesion(usuario.id);
     setCookieSesion(res, token);

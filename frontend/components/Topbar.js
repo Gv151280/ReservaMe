@@ -22,11 +22,13 @@ export default function Topbar() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [notifs, setNotifs] = useState([]);
+  const [colegio, setColegio] = useState(null);
   const noLeidas = notifs.filter((n) => !n.leida).length;
 
   useEffect(() => {
     if (!user) return;
     api.get('/notificaciones/mias').then((d) => setNotifs(d.notificaciones)).catch(() => {});
+    api.get('/colegio').then((d) => setColegio(d.colegio)).catch(() => {});
   }, [user]);
 
   async function toggle() {
@@ -44,9 +46,10 @@ export default function Topbar() {
     <div className="topbar" style={{ position: 'relative' }}>
       <LogoMark />
       <div>
-        <div className="brand-title">ReservaMe</div>
+        <div className="brand-title">ReservaMe{colegio?.nombre ? ` · ${colegio.nombre}` : ''}</div>
         <div className="brand-sub">{user.nombre} · <b style={{ color: 'var(--purple-dark)' }}>{rolesTexto(user.roles)}</b></div>
       </div>
+      {colegio?.logoUrl && <img src={colegio.logoUrl} alt="" style={{ height: 30, width: 30, borderRadius: 8, objectFit: 'cover', marginLeft: 4 }} />}
       <div className="topbar-actions">
         <button className="bell-btn" onClick={toggle} aria-label="Notificaciones">
           🔔{noLeidas > 0 && <span className="bell-dot" />}

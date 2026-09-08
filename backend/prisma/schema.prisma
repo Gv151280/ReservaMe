@@ -15,6 +15,7 @@ datasource db {
 model Colegio {
   id       String                 @id @default(uuid())
   nombre   String
+  logoUrl  String?                @map("logo_url")
   usuarios Usuario[]
   salas    Sala[]
   horarios HorarioInstitucional[]
