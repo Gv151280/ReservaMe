@@ -7,6 +7,7 @@ export default function AdminColegio() {
   const [colegio, setColegio] = useState(null);
   const [nombre, setNombre] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [subiendoLogo, setSubiendoLogo] = useState(false);
   const [textoNomina, setTextoNomina] = useState('');
   const [resultado, setResultado] = useState(null);
   const [importando, setImportando] = useState(false);
@@ -22,6 +23,41 @@ export default function AdminColegio() {
       showToast('Datos del colegio guardados.', 'success');
     } catch (err) {
       showToast(err.message, 'error');
+    }
+  }
+
+  async function subirLogo(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/jpg', 'image/png'].includes(file.type)) {
+      showToast('Solo se permiten imágenes JPG o PNG.', 'error');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      showToast('La imagen no puede superar los 4 MB.', 'error');
+      e.target.value = '';
+      return;
+    }
+
+    setSubiendoLogo(true);
+    try {
+      const res = await fetch('/api/upload-logo', {
+        method: 'POST',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo subir la imagen.');
+
+      setLogoUrl(data.url);
+      showToast('Logo subido. No olvides presionar Guardar.', 'success');
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setSubiendoLogo(false);
+      e.target.value = '';
     }
   }
 
@@ -61,10 +97,23 @@ export default function AdminColegio() {
           <label>Nombre</label>
           <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} />
         </div>
+
         <div className="field">
-          <label>URL de la insignia/logo (imagen ya publicada en internet)</label>
+          <label>Insignia/logo del colegio</label>
+          {logoUrl && (
+            <div style={{ margin: '8px 0' }}>
+              <img src={logoUrl} alt="Logo del colegio" style={{ maxWidth: 120, maxHeight: 120, borderRadius: 8 }} />
+            </div>
+          )}
+          <input type="file" accept="image/jpeg,image/jpg,image/png" onChange={subirLogo} disabled={subiendoLogo} />
+          {subiendoLogo && <p className="hint">Subiendo imagen…</p>}
+        </div>
+
+        <div className="field">
+          <label>O bien, pega la URL de una imagen ya publicada en internet</label>
           <input type="text" placeholder="https://..." value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} />
         </div>
+
         <button className="btn btn-primary btn-block" onClick={guardarColegio}>Guardar</button>
       </div>
 
