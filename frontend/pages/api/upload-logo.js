@@ -25,8 +25,14 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'No autenticado' });
     }
 
-    const user = await meResponse.json();
-    if (user.rol !== 'administrador') {
+    const data = await meResponse.json();
+    const user = data.user;
+
+    if (!user) {
+      return res.status(401).json({ error: 'No autenticado' });
+    }
+
+    if (!user.roles.includes('administrador')) {
       return res.status(403).json({ error: 'Solo un administrador puede subir el logo' });
     }
 
