@@ -11,7 +11,8 @@
     "prisma:migrate": "prisma migrate dev",
     "seed": "node prisma/seed.js"
   },
-  "dependencies": {
+  "dependencies": {,
+    "@vercel/blob": "^2.0.0",
     "@prisma/client": "^5.18.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
