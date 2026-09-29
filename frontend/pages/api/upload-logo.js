@@ -1,8 +1,9 @@
 import { put } from '@vercel/blob';
+import jwt from 'jsonwebtoken';
 
 export const config = {
   api: {
-    bodyParser: false, // recibimos el archivo como raw body
+    bodyParser: false,
   },
 };
 
@@ -15,25 +16,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Validar que quien sube sea Administrador, reenviando la cookie al backend
-    const cookie = req.headers.cookie || '';
-    const meResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
-      headers: { cookie },
-    });
-
-    if (!meResponse.ok) {
-      return res.status(401).json({ error: 'No autenticado' });
+    // 1. Validar el ticket emitido por el backend
+    const ticket = req.headers['x-upload-ticket'];
+    if (!ticket) {
+      return res.status(401).json({ error: 'Falta el ticket de autorización.' });
     }
 
-    const data = await meResponse.json();
-    const user = data.user;
-
-    if (!user) {
-      return res.status(401).json({ error: 'No autenticado' });
+    let payload;
+    try {
+      payload = jwt.verify(ticket, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({ error: 'Ticket inválido o expirado.' });
     }
 
-    if (!user.roles.includes('administrador')) {
-      return res.status(403).json({ error: 'Solo un administrador puede subir el logo' });
+    if (payload.purpose !== 'upload-logo' || !payload.colegioId) {
+      return res.status(401).json({ error: 'Ticket inválido.' });
     }
 
     // 2. Validar tipo de contenido
@@ -53,20 +50,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'El archivo supera los 4 MB.' });
     }
 
-    // 4. Subir a Vercel Blob
+    // 4. Subir a Vercel Blob (autenticación automática vía OIDC, sin token)
     const extension = contentType === 'image/png' ? 'png' : 'jpg';
-    const filename = `logos/colegio-${user.colegioId}-${Date.now()}.${extension}`;
+    const filename = `logos/colegio-${payload.colegioId}-${Date.now()}.${extension}`;
 
     const blob = await put(filename, buffer, {
       access: 'public',
       contentType,
     });
 
-    // 5. Devolver la URL pública
     return res.status(200).json({ url: blob.url });
 
   } catch (error) {
     console.error('[upload-logo] Error:', error);
-    return res.status(500).json({ error: 'Error al subir el logo' });
+    return res.status(500).json({ error: 'No se pudo subir el logo.' });
   }
 }
