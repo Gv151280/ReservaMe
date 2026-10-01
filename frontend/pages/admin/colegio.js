@@ -43,9 +43,13 @@ export default function AdminColegio() {
 
     setSubiendoLogo(true);
     try {
+      // 1. Pedir un ticket de autorización de corta duración al backend
+      const { ticket } = await api.get('/colegio/logo-ticket');
+
+      // 2. Subir el archivo a Vercel Blob a través de la ruta interna del frontend
       const res = await fetch('/api/upload-logo', {
         method: 'POST',
-        headers: { 'Content-Type': file.type },
+        headers: { 'Content-Type': file.type, 'x-upload-ticket': ticket },
         body: file,
       });
       const data = await res.json();
