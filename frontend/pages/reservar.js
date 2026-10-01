@@ -280,7 +280,7 @@ export default function Reservar() {
               <label>🕒 Duración</label>
               <div className="segmented">
                 <button className={duracion === 45 ? 'active' : ''} onClick={() => setDuracion(45)}>45 min</button>
-                <button className={duracion === 90 ? 'active' : ''} onClick={() => setDuracion(90)}>90 min (2 bloques)</button>
+                <button className={duracion === 90 ? 'active' : ''} onClick={() => setDuracion(90)}>90 min (2 horas)</button>
               </div>
             </div>
           )}
