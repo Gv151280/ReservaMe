@@ -179,3 +179,41 @@ main.page { padding: 14px 16px 20px; }
 
 .icono-resultado-exito { width: 96px; height: 96px; margin: 30px auto 20px; border-radius: 50%; background: var(--green-light); display: flex; align-items: center; justify-content: center; font-size: 46px; color: var(--green-dark); }
 .icono-resultado-pendiente { width: 96px; height: 96px; margin: 30px auto 20px; display: flex; align-items: center; justify-content: center; font-size: 60px; }
+
+/* ---- Modo oscuro y tamaño de letra ---- */
+
+:root { --ui-scale: 1; }
+.app-shell { zoom: var(--ui-scale); }
+
+:root[data-theme="dark"] {
+  --purple: #9a72cf;
+  --purple-light: #3a2d52;
+  --purple-dark: #d6bff0;
+  --blue: #63bdf0;
+  --blue-light: #1f3a47;
+  --blue-dark: #8fd4f5;
+  --green: #5bc48e;
+  --green-light: #1f3a2d;
+  --green-dark: #8fe0b8;
+  --amber: #f0c868;
+  --amber-light: #4a3a1a;
+  --amber-dark: #f0cf80;
+  --coral: #e37888;
+  --coral-light: #4a2228;
+  --coral-dark: #f0a0ac;
+  --gray-light: #2a2433;
+  --gray: #a79fb5;
+  --gray-dark: #d7d0e0;
+  --ink: #f1edf6;
+  --paper: #18141f;
+  --card: #221c2b;
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.settings-panel { width: 250px; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; font-size: 13px; color: var(--gray-dark); }
+.scale-row { padding: 10px 14px; }
+.scale-label { font-size: 12.5px; color: var(--gray-dark); margin-bottom: 8px; }
+.scale-buttons { display: flex; gap: 6px; }
+.scale-buttons button { flex: 1; padding: 8px 4px; border-radius: 10px; border: 1.5px solid #e4deec; background: var(--card); font-weight: 700; color: var(--gray-dark); }
+.scale-buttons button.active { border-color: var(--purple); background: var(--purple-light); color: var(--purple-dark); }
