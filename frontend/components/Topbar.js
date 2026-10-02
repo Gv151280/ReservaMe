@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import LogoMark from './LogoMark';
+import SettingsMenu from './SettingsMenu';
 import { api } from '../lib/api';
 import { useSession } from '../lib/useSession';
 
 const ROL_LABEL = { docente: 'Docente', encargado_sala: 'Encargado de sala', directivo: 'Directivo (Jefe UTP)', administrador: 'Administrador' };
-// Orden de importancia para mostrar primero el rol más relevante si tiene varios.
 const ORDEN_ROLES = ['administrador', 'directivo', 'encargado_sala', 'docente'];
 
 function initials(nombre) {
@@ -54,6 +54,7 @@ export default function Topbar() {
         <button className="bell-btn" onClick={toggle} aria-label="Notificaciones">
           🔔{noLeidas > 0 && <span className="bell-dot" />}
         </button>
+        <SettingsMenu />
         <div className="avatar" title={`${user.email} — clic para cerrar sesión`} onClick={() => logout().then(() => router.push('/login'))} style={{ cursor: 'pointer' }}>
           {initials(user.nombre)}
         </div>
