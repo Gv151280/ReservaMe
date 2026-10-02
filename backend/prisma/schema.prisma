@@ -39,6 +39,7 @@ model Usuario {
   notificaciones  Notificacion[]
   bloqueosCreados    Bloqueo[] @relation("BloqueoCreadoPor")
   bloqueosRevertidos Bloqueo[] @relation("BloqueoRevertidoPor")
+  pushSubscriptions  PushSubscription[]
 
   @@map("usuario")
 }
@@ -186,4 +187,16 @@ model Bloqueo {
 
   @@index([salaId, fechaInicio, fechaFin])
   @@map("bloqueo")
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  usuarioId String   @map("usuario_id")
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  creadoEn  DateTime @default(now()) @map("creado_en")
+
+  @@map("push_subscription")
 }
