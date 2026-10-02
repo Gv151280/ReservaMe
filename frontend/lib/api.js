@@ -25,7 +25,7 @@ export const api = {
   get: (path) => apiFetch(path),
   post: (path, body) => apiFetch(path, { method: 'POST', body: JSON.stringify(body || {}) }),
   patch: (path, body) => apiFetch(path, { method: 'PATCH', body: JSON.stringify(body || {}) }),
-  del: (path) => apiFetch(path, { method: 'DELETE' }),
+  del: (path, body) => apiFetch(path, { method: 'DELETE', ...(body ? { body: JSON.stringify(body) } : {}) }),
 };
 
 export { API_URL };
