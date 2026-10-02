@@ -1,9 +1,38 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSettings } from '../lib/useSettings';
+import { useToast } from './Toast';
+import { pushSoportado, suscripcionActual, activarPush, desactivarPush } from '../lib/push';
 
 export default function SettingsMenu() {
   const [open, setOpen] = useState(false);
   const { theme, setTheme, scaleIndex, setScaleIndex, scaleLabel } = useSettings();
+  const { showToast } = useToast();
+  const [pushOn, setPushOn] = useState(false);
+  const [pushDisponible, setPushDisponible] = useState(false);
+  const [cargandoPush, setCargandoPush] = useState(false);
+
+  useEffect(() => {
+    pushSoportado().then(setPushDisponible);
+    suscripcionActual().then((s) => setPushOn(!!s));
+  }, []);
+
+  async function togglePush() {
+    setCargandoPush(true);
+    try {
+      if (pushOn) {
+        await desactivarPush();
+        setPushOn(false);
+      } else {
+        await activarPush();
+        setPushOn(true);
+        showToast('Notificaciones activadas.', 'success');
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setCargandoPush(false);
+    }
+  }
 
   return (
     <div style={{ position: 'relative' }}>
@@ -15,6 +44,12 @@ export default function SettingsMenu() {
             <span>Modo oscuro</span>
             <div className={`switch ${theme === 'dark' ? 'on' : ''}`} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
           </div>
+          {pushDisponible && (
+            <div className="settings-row">
+              <span>Notificaciones push</span>
+              <div className={`switch ${pushOn ? 'on' : ''}`} onClick={() => !cargandoPush && togglePush()} />
+            </div>
+          )}
           <div className="scale-row">
             <div className="scale-label">Tamaño de letra: <b>{scaleLabel}</b></div>
             <div className="scale-buttons">
