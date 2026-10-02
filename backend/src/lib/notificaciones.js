@@ -1,5 +1,6 @@
 const prisma = require('../db');
 const { sendEmail } = require('../providers/emailProvider');
+const { enviarPush } = require('./push');
 
 async function crearNotificacion({ reservaId, destinatarioId, canal, mensaje }) {
   const notif = await prisma.notificacion.create({
@@ -17,6 +18,20 @@ async function crearNotificacion({ reservaId, destinatarioId, canal, mensaje }) 
       where: { id: notif.id },
       data: { estadoEnvio: resultado.ok ? 'enviado' : 'fallido', enviadoEn: new Date() },
     });
+  } else if (canal === 'push') {
+    try {
+      await enviarPush(destinatarioId, { title: 'ReservaMe', body: mensaje });
+      await prisma.notificacion.update({
+        where: { id: notif.id },
+        data: { estadoEnvio: 'enviado', enviadoEn: new Date() },
+      });
+    } catch (err) {
+      console.error('[notificaciones] Error enviando push:', err);
+      await prisma.notificacion.update({
+        where: { id: notif.id },
+        data: { estadoEnvio: 'fallido', enviadoEn: new Date() },
+      });
+    }
   } else {
     await prisma.notificacion.update({
       where: { id: notif.id },
@@ -27,9 +42,6 @@ async function crearNotificacion({ reservaId, destinatarioId, canal, mensaje }) 
   return notif;
 }
 
-// Destinatarios de una reserva pendiente: el encargado de la sala si tiene uno
-// asignado; si no, TODOS los administradores del colegio (para que ninguna
-// solicitud quede sin nadie que la vea).
 async function destinatariosDeAprobacion(sala) {
   if (sala.encargadoId) return [sala.encargadoId];
   const admins = await prisma.usuario.findMany({
@@ -39,8 +51,6 @@ async function destinatariosDeAprobacion(sala) {
   return admins.map((a) => a.id);
 }
 
-// Reserva creada con tipo_uso "reunion_otro" (siempre requiere aprobación) ->
-// notifica al encargado de la sala, o a los administradores si no hay encargado.
 async function notificarReservaPendiente({ reserva, sala, solicitante }) {
   const destinatarios = await destinatariosDeAprobacion(sala);
   const mensaje = `${solicitante.nombre} solicitó reservar ${sala.nombre} — pendiente de tu aprobación.`;
@@ -50,19 +60,16 @@ async function notificarReservaPendiente({ reserva, sala, solicitante }) {
   }
 }
 
-// Reserva de tipo "clase" -> siempre automática -> notifica a quien reservó (push).
 async function notificarReservaConfirmada({ reserva, sala, usuarioId }) {
   const mensaje = `Tu reserva de ${sala.nombre} quedó confirmada.`;
   await crearNotificacion({ reservaId: reserva.id, destinatarioId: usuarioId, canal: 'push', mensaje });
 }
 
-// Reserva aprobada -> notifica a quien reservó (push).
 async function notificarReservaAprobada({ reserva, sala }) {
   const mensaje = `Tu reserva de ${sala.nombre} fue aprobada. ✅`;
   await crearNotificacion({ reservaId: reserva.id, destinatarioId: reserva.usuarioId, canal: 'push', mensaje });
 }
 
-// Reserva rechazada -> notifica a quien reservó (push + email, incluye motivo si existe).
 async function notificarReservaRechazada({ reserva, sala }) {
   const motivoTxt = reserva.motivoRechazo ? ` Motivo: ${reserva.motivoRechazo}` : '';
   const mensaje = `Tu solicitud de ${sala.nombre} fue rechazada.${motivoTxt}`;
