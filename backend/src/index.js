@@ -11,6 +11,7 @@ const horarioRoutes = require('./routes/horario');
 const notificacionesRoutes = require('./routes/notificaciones');
 const bloqueosRoutes = require('./routes/bloqueos');
 const colegioRoutes = require('./routes/colegio');
+const pushRoutes = require('./routes/push');
      
 
 const app = express();
@@ -33,6 +34,7 @@ app.use('/usuarios', usuariosRoutes);
 app.use('/horario', horarioRoutes);
 app.use('/notificaciones', notificacionesRoutes);
 app.use('/colegio', colegioRoutes);
+app.use('/push', pushRoutes);
 app.use('/bloqueos', bloqueosRoutes);
 
 // Manejador de errores genérico (por si algo se escapa de los try/catch de las rutas).
