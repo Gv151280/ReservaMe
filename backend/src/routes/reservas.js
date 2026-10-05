@@ -276,4 +276,52 @@ router.get('/exportar-csv', requireAuth, requireRole('directivo', 'administrador
     res.status(err.status || 500).json({ error: err.message });
   }
 });
+
+// GET /reservas/recordatorios/procesar
+// Lo llama cron-job.org cada 5 min con el header x-cron-secret.
+// Envía push a los docentes cuyas reservas confirmadas empiezan en los próximos 15 minutos.
+router.get('/recordatorios/procesar', async (req, res) => {
+  const secreto = process.env.CRON_SECRET;
+  if (!secreto || req.get('x-cron-secret') !== secreto) {
+    return res.status(401).json({ error: 'No autorizado.' });
+  }
+  try {
+    const ahora = new Date();
+    const limite = new Date(ahora.getTime() + 15 * 60 * 1000);
+
+    const candidatas = await prisma.reserva.findMany({
+      where: {
+        estado: 'confirmada',
+        recordatorioEnviado: false,
+        fechaInicio: { gt: ahora, lte: limite },
+      },
+      include: { sala: true },
+    });
+
+    const fmtHora = new Intl.DateTimeFormat('es-CL', {
+      timeZone: 'America/Santiago',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+
+    let enviados = 0;
+    for (const r of candidatas) {
+      // Reclamo atómico: si otra ejecución ya la marcó, se salta.
+      const { count } = await prisma.reserva.updateMany({
+        where: { id: r.id, recordatorioEnviado: false },
+        data: { recordatorioEnviado: true },
+      });
+      if (count === 0) continue;
+
+      const mensaje = `Tu reserva de ${r.sala?.nombre || 'la sala'} comienza a las ${fmtHora.format(r.fechaInicio)}. ¡Te esperamos!`;
+      await crearNotificacion({ reservaId: r.id, destinatarioId: r.usuarioId, canal: 'push', mensaje });
+      enviados++;
+    }
+
+    res.json({ candidatas: candidatas.length, enviados });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
 module.exports = router;
