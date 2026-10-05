@@ -198,4 +198,82 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 });
 
+// GET /reservas/exportar-csv?desde=ISO&hasta=ISO [directivo o admin]
+// Exporta las reservas del colegio a CSV (separador ";" para que Excel en español lo abra bien).
+// desde/hasta son opcionales y filtran por fechaInicio.
+router.get('/exportar-csv', requireAuth, requireRole('directivo', 'administrador'), async (req, res) => {
+  try {
+    const { desde, hasta } = req.query;
+    const filtroFecha = {};
+    if (desde) {
+      const d = new Date(desde);
+      if (isNaN(d)) throw errorHttp(400, 'Parámetro "desde" inválido.');
+      filtroFecha.gte = d;
+    }
+    if (hasta) {
+      const h = new Date(hasta);
+      if (isNaN(h)) throw errorHttp(400, 'Parámetro "hasta" inválido.');
+      filtroFecha.lte = h;
+    }
+
+    const reservas = await prisma.reserva.findMany({
+      where: {
+        sala: { colegioId: req.user.colegioId },
+        ...(Object.keys(filtroFecha).length ? { fechaInicio: filtroFecha } : {}),
+      },
+      include: { sala: true, usuario: { select: { nombre: true, emailInstitucional: true } } },
+      orderBy: { fechaInicio: 'asc' },
+    });
+
+    const TZ = 'America/Santiago';
+    const fmtFecha = new Intl.DateTimeFormat('es-CL', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' });
+    const fmtHora = new Intl.DateTimeFormat('es-CL', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
+
+    const tipoUsoLegible = { clase: 'Clase', reunion_otro: 'Reunión / otro' };
+    const estadoLegible = {
+      pendiente: 'Pendiente',
+      confirmada: 'Confirmada',
+      rechazada: 'Rechazada',
+      cancelada: 'Cancelada',
+    };
+
+    // Escapa una celda: envuelve en comillas y duplica las comillas internas.
+    const celda = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
+    const encabezado = [
+      'Fecha', 'Hora inicio', 'Hora fin', 'Sala', 'Tipo de uso', 'Estado',
+      'Solicitante', 'Correo', 'Equipamiento solicitado', 'Motivo de rechazo',
+    ];
+
+    const filas = reservas.map((r) => {
+      const equipamiento = Array.isArray(r.equipamientoSolicitado)
+        ? r.equipamientoSolicitado
+            .map((e) => (e.cantidad ? `${e.nombre} x${e.cantidad}` : e.nombre))
+            .join(', ')
+        : '';
+      return [
+        fmtFecha.format(r.fechaInicio),
+        fmtHora.format(r.fechaInicio),
+        fmtHora.format(r.fechaFin),
+        r.sala?.nombre,
+        tipoUsoLegible[r.tipoUso] || r.tipoUso,
+        estadoLegible[r.estado] || r.estado,
+        r.usuario?.nombre,
+        r.usuario?.emailInstitucional,
+        equipamiento,
+        r.motivoRechazo,
+      ].map(celda).join(';');
+    });
+
+    // BOM UTF-8 para que Excel reconozca tildes y ñ.
+    const csv = '\uFEFF' + [encabezado.map(celda).join(';'), ...filas].join('\r\n');
+
+    const hoy = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="reservas_${hoy}.csv"`);
+    res.send(csv);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
 module.exports = router;
