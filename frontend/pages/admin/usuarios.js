@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import { useToast } from '../../components/Toast';
+import ExportarCsv from '../../components/ExportarCsv';
 
 const ROLES = ['docente', 'encargado_sala', 'directivo', 'administrador'];
 const LABELS = { docente: 'Docente', encargado_sala: 'Encargado de sala', directivo: 'Directivo (Jefe UTP)', administrador: 'Administrador' };
@@ -34,6 +35,10 @@ export default function AdminUsuarios() {
     <div>
       <h1 className="page-title">Gestión de usuarios</h1>
       <p className="page-sub">Asigna roles. Una persona puede tener más de uno.</p>
+
+      <div style={{ margin: '12px 0' }}>
+        <ExportarCsv />
+      </div>
 
       {usuarios.map((u) => (
         <div className="admin-card" key={u.id}>
