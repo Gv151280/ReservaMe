@@ -65,6 +65,8 @@ export default function MisReservas() {
         lista.map((r) => {
           const puedeCancelar = (r.estado === 'confirmada' || r.estado === 'pendiente') && new Date(r.fechaInicio) > ahora;
           const puedeAgregarCalendario = r.estado === 'confirmada' && new Date(r.fechaInicio) >= ahora;
+          const hayAcciones = puedeAgregarCalendario || puedeCancelar;
+
           return (
             <div className="reserva-item" key={r.id}>
               <div className="reserva-top">
@@ -80,23 +82,22 @@ export default function MisReservas() {
               {r.estado === 'rechazada' && r.motivoRechazo && (
                 <p className="hint" style={{ color: 'var(--coral-dark)' }}>Motivo: {r.motivoRechazo}</p>
               )}
-              {(puedeAgregarCalendario || puedeCancelar) && (
+              {hayAcciones && (
                 <div className="reserva-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {puedeAgregarCalendario && (
-                    <>
-                      <button className="btn btn-ghost btn-sm" onClick={() => descargarIcs(r)}>Descargar .ics</button>
-                      
-                        className="btn btn-ghost btn-sm"
-                        href={urlOutlook(r)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Agregar a Outlook
-                      </a>
-                    </>
+                    <button className="btn btn-ghost btn-sm" onClick={() => descargarIcs(r)}>
+                      Descargar .ics
+                    </button>
+                  )}
+                  {puedeAgregarCalendario && (
+                    <a className="btn btn-ghost btn-sm" href={urlOutlook(r)} target="_blank" rel="noopener noreferrer">
+                      Agregar a Outlook
+                    </a>
                   )}
                   {puedeCancelar && (
-                    <button className="btn btn-coral btn-sm" onClick={() => setConfirmarCancelarId(r.id)}>Cancelar</button>
+                    <button className="btn btn-coral btn-sm" onClick={() => setConfirmarCancelarId(r.id)}>
+                      Cancelar
+                    </button>
                   )}
                 </div>
               )}
