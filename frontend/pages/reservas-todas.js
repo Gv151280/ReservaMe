@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
 import Badge from '../components/Badge';
+import ExportarCsv from '../components/ExportarCsv';
 
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
 function fechaISODe(isoString) {
@@ -23,6 +24,8 @@ export default function TodasLasReservas() {
   const { showToast } = useToast();
   const [reservas, setReservas] = useState(null);
   const [confirmarId, setConfirmarId] = useState(null);
+  const [desdeFecha, setDesdeFecha] = useState('');
+  const [hastaFecha, setHastaFecha] = useState('');
 
   function cargar() {
     api.get('/reservas/todas').then((d) => setReservas(d.reservas)).catch((e) => showToast(e.message, 'error'));
@@ -40,12 +43,28 @@ export default function TodasLasReservas() {
     }
   }
 
+  // Convierte la fecha elegida (hora local del navegador) a ISO para el backend.
+  const desdeISO = desdeFecha ? new Date(`${desdeFecha}T00:00:00`).toISOString() : '';
+  const hastaISO = hastaFecha ? new Date(`${hastaFecha}T23:59:59`).toISOString() : '';
+
   if (reservas === null) return <p className="page-sub">Cargando…</p>;
 
   return (
     <div>
       <h1 className="page-title">Todas las reservas</h1>
       <p className="page-sub">Puedes anular la reserva de cualquier docente, en cualquier sala.</p>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', margin: '12px 0' }}>
+        <label style={{ fontSize: 13 }}>
+          Desde
+          <input type="date" value={desdeFecha} onChange={(e) => setDesdeFecha(e.target.value)} style={{ display: 'block', marginTop: 4 }} />
+        </label>
+        <label style={{ fontSize: 13 }}>
+          Hasta
+          <input type="date" value={hastaFecha} onChange={(e) => setHastaFecha(e.target.value)} style={{ display: 'block', marginTop: 4 }} />
+        </label>
+        <ExportarCsv desde={desdeISO} hasta={hastaISO} />
+      </div>
 
       {reservas.length === 0 ? (
         <div className="empty-state"><div className="em">📭</div><p>No hay reservas activas.</p></div>
