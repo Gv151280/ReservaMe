@@ -41,7 +41,7 @@ export default function ExportarCsv({ desde, hasta }) {
   }
 
   return (
-    <button className="btn" onClick={descargar} disabled={cargando}>
+    <button className="btn btn-coral-solid" onClick={descargar} disabled={cargando}>
       {cargando ? 'Exportando…' : 'Exportar CSV'}
     </button>
   );
