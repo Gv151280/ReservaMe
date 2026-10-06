@@ -4,8 +4,24 @@ const { requireAuth } = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
 const { validarAnticipacion, puedeRevertirBloqueo } = require('../lib/validaciones');
 const { registrarAuditoria } = require('../lib/auditoria');
+const { crearNotificacion } = require('../lib/notificaciones');
 
 const router = express.Router();
+
+const fmtFechaHora = new Intl.DateTimeFormat('es-CL', {
+  timeZone: 'America/Santiago',
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+const fmtHora = new Intl.DateTimeFormat('es-CL', {
+  timeZone: 'America/Santiago',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
 
 // GET /bloqueos?activo=true -> lista bloqueos del colegio (para el panel de gestión
 // y para que el calendario de disponibilidad los pinte como ocupados).
@@ -23,6 +39,8 @@ router.get('/', requireAuth, async (req, res) => {
 
 // POST /bloqueos [directivo o administrador]
 // body: { salaId, fechaInicio, fechaFin, motivo }  (motivo obligatorio)
+// Al crear el bloqueo, anula las reservas pendientes o confirmadas que se crucen con
+// el rango y avisa a cada docente afectado.
 router.post('/', requireAuth, requireRole('directivo', 'administrador'), async (req, res) => {
   try {
     const { salaId, fechaInicio, fechaFin, motivo } = req.body;
@@ -38,9 +56,41 @@ router.post('/', requireAuth, requireRole('directivo', 'administrador'), async (
     if (fin <= inicio) return res.status(400).json({ error: 'La fecha/hora de término debe ser posterior al inicio.' });
     validarAnticipacion(inicio);
 
+    const motivoLimpio = motivo.trim();
     const bloqueo = await prisma.bloqueo.create({
-      data: { salaId, creadoPorId: req.user.id, fechaInicio: inicio, fechaFin: fin, motivo: motivo.trim() },
+      data: { salaId, creadoPorId: req.user.id, fechaInicio: inicio, fechaFin: fin, motivo: motivoLimpio },
     });
+
+    // Reservas que se cruzan con el bloqueo: no se realizarán.
+    const afectadas = await prisma.reserva.findMany({
+      where: {
+        salaId,
+        estado: { in: ['pendiente', 'confirmada'] },
+        fechaInicio: { lt: fin },
+        fechaFin: { gt: inicio },
+      },
+      include: { sala: true },
+    });
+
+    for (const r of afectadas) {
+      await prisma.reserva.update({
+        where: { id: r.id },
+        data: { estado: 'cancelada', motivoRechazo: `Sala bloqueada: ${motivoLimpio}` },
+      });
+
+      const mensaje = `Tu reserva de ${sala.nombre} del ${fmtFechaHora.format(r.fechaInicio)} al ${fmtHora.format(r.fechaFin)} fue anulada porque la sala quedó bloqueada: ${motivoLimpio}. Puedes reservar otro horario.`;
+      await crearNotificacion({ reservaId: r.id, destinatarioId: r.usuarioId, canal: 'push', mensaje });
+      await crearNotificacion({ reservaId: r.id, destinatarioId: r.usuarioId, canal: 'email', mensaje });
+
+      await registrarAuditoria({
+        colegioId: req.user.colegioId,
+        usuario: req.user,
+        accion: 'reserva.anular',
+        entidad: 'reserva',
+        entidadId: r.id,
+        detalle: { sala: sala.nombre, solicitanteId: r.usuarioId, motivoBloqueo: bloqueo.id },
+      });
+    }
 
     await registrarAuditoria({
       colegioId: req.user.colegioId,
@@ -48,16 +98,17 @@ router.post('/', requireAuth, requireRole('directivo', 'administrador'), async (
       accion: 'bloqueo.crear',
       entidad: 'bloqueo',
       entidadId: bloqueo.id,
-      detalle: { sala: sala.nombre, motivo: bloqueo.motivo, fechaInicio: inicio, fechaFin: fin },
+      detalle: { sala: sala.nombre, motivo: motivoLimpio, fechaInicio: inicio, fechaFin: fin, reservasAnuladas: afectadas.length },
     });
 
-    res.status(201).json({ bloqueo });
+    res.status(201).json({ bloqueo, reservasAnuladas: afectadas.length });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
 });
 
 // PATCH /bloqueos/:id/revertir [admin: cualquiera; directivo: solo los que él creó]
+// Revertir libera la sala para nuevas reservas. Las reservas anuladas no se restauran.
 router.patch('/:id/revertir', requireAuth, async (req, res) => {
   try {
     const bloqueo = await prisma.bloqueo.findUnique({ where: { id: req.params.id }, include: { sala: true } });
