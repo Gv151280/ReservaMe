@@ -3,6 +3,7 @@ const prisma = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
 const { validarAnticipacion, puedeRevertirBloqueo } = require('../lib/validaciones');
+const { registrarAuditoria } = require('../lib/auditoria');
 
 const router = express.Router();
 
@@ -40,6 +41,16 @@ router.post('/', requireAuth, requireRole('directivo', 'administrador'), async (
     const bloqueo = await prisma.bloqueo.create({
       data: { salaId, creadoPorId: req.user.id, fechaInicio: inicio, fechaFin: fin, motivo: motivo.trim() },
     });
+
+    await registrarAuditoria({
+      colegioId: req.user.colegioId,
+      usuario: req.user,
+      accion: 'bloqueo.crear',
+      entidad: 'bloqueo',
+      entidadId: bloqueo.id,
+      detalle: { sala: sala.nombre, motivo: bloqueo.motivo, fechaInicio: inicio, fechaFin: fin },
+    });
+
     res.status(201).json({ bloqueo });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -48,18 +59,32 @@ router.post('/', requireAuth, requireRole('directivo', 'administrador'), async (
 
 // PATCH /bloqueos/:id/revertir [admin: cualquiera; directivo: solo los que él creó]
 router.patch('/:id/revertir', requireAuth, async (req, res) => {
-  const bloqueo = await prisma.bloqueo.findUnique({ where: { id: req.params.id } });
-  if (!bloqueo) return res.status(404).json({ error: 'Bloqueo no encontrado.' });
-  if (!puedeRevertirBloqueo(req.user, bloqueo)) {
-    return res.status(403).json({ error: 'No tienes permiso para revertir este bloqueo.' });
-  }
-  if (!bloqueo.activo) return res.status(400).json({ error: 'Este bloqueo ya estaba revertido.' });
+  try {
+    const bloqueo = await prisma.bloqueo.findUnique({ where: { id: req.params.id }, include: { sala: true } });
+    if (!bloqueo) return res.status(404).json({ error: 'Bloqueo no encontrado.' });
+    if (!puedeRevertirBloqueo(req.user, bloqueo)) {
+      return res.status(403).json({ error: 'No tienes permiso para revertir este bloqueo.' });
+    }
+    if (!bloqueo.activo) return res.status(400).json({ error: 'Este bloqueo ya estaba revertido.' });
 
-  const actualizado = await prisma.bloqueo.update({
-    where: { id: bloqueo.id },
-    data: { activo: false, revertidoPorId: req.user.id, revertidoEn: new Date() },
-  });
-  res.json({ bloqueo: actualizado });
+    const actualizado = await prisma.bloqueo.update({
+      where: { id: bloqueo.id },
+      data: { activo: false, revertidoPorId: req.user.id, revertidoEn: new Date() },
+    });
+
+    await registrarAuditoria({
+      colegioId: req.user.colegioId,
+      usuario: req.user,
+      accion: 'bloqueo.revertir',
+      entidad: 'bloqueo',
+      entidadId: bloqueo.id,
+      detalle: { sala: bloqueo.sala?.nombre, motivo: bloqueo.motivo },
+    });
+
+    res.json({ bloqueo: actualizado });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
