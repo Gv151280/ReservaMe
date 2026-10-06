@@ -368,3 +368,21 @@ router.get('/recordatorios/procesar', async (req, res) => {
 });
 
 module.exports = router;
+
+// GET /reservas/auditoria?accion=... [solo administrador]
+// Devuelve los últimos 200 registros de auditoría del colegio, con filtro opcional por acción.
+router.get('/auditoria', requireAuth, requireRole('administrador'), async (req, res) => {
+  try {
+    const where = { colegioId: req.user.colegioId };
+    if (req.query.accion) where.accion = String(req.query.accion);
+
+    const registros = await prisma.auditLog.findMany({
+      where,
+      orderBy: { creadoEn: 'desc' },
+      take: 200,
+    });
+    res.json({ registros });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
