@@ -7,18 +7,21 @@ import { ToastProvider } from '../components/Toast';
 import Topbar from '../components/Topbar';
 import BottomNav from '../components/BottomNav';
 
-const RUTAS_PUBLICAS = ['/login'];
+// Rutas accesibles con o sin sesión (sin barra superior ni menú inferior).
+const RUTAS_LIBRES = ['/privacidad'];
+// Rutas que solo se ven sin sesión (si hay sesión, se redirige a /).
+const RUTAS_SOLO_SIN_SESION = ['/login'];
 
 function Guard({ children }) {
   const { user, loading } = useSession();
   const router = useRouter();
-  const esPublica = RUTAS_PUBLICAS.includes(router.pathname);
+  const esSoloSinSesion = RUTAS_SOLO_SIN_SESION.includes(router.pathname);
 
   useEffect(() => {
     if (loading) return;
-    if (!user && !esPublica) router.replace('/login');
-    if (user && esPublica) router.replace('/');
-  }, [loading, user, esPublica, router]);
+    if (!user && !esSoloSinSesion) router.replace('/login');
+    if (user && esSoloSinSesion) router.replace('/');
+  }, [loading, user, esSoloSinSesion, router]);
 
   if (loading) {
     return (
@@ -28,26 +31,35 @@ function Guard({ children }) {
     );
   }
 
-  if (!user && !esPublica) return null;
-  if (user && esPublica) return null;
+  if (!user && !esSoloSinSesion) return null;
+  if (user && esSoloSinSesion) return null;
 
   return children;
 }
 
 export default function App({ Component, pageProps }) {
+  const router = useRouter();
+  const esLibre = RUTAS_LIBRES.includes(router.pathname);
+
   return (
     <SettingsProvider>
       <SessionProvider>
         <ToastProvider>
-          <Guard>
-            <div className="app-shell">
-              <Topbar />
-              <main className="page">
-                <Component {...pageProps} />
-              </main>
-              <BottomNav />
-            </div>
-          </Guard>
+          {esLibre ? (
+            <main className="page">
+              <Component {...pageProps} />
+            </main>
+          ) : (
+            <Guard>
+              <div className="app-shell">
+                <Topbar />
+                <main className="page">
+                  <Component {...pageProps} />
+                </main>
+                <BottomNav />
+              </div>
+            </Guard>
+          )}
         </ToastProvider>
       </SessionProvider>
     </SettingsProvider>
