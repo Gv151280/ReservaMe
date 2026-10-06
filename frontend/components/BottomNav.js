@@ -58,6 +58,12 @@ const ICONS = {
       <circle cx="4" cy="18" r="1" />
     </>
   ),
+  shield: (
+    <>
+      <path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z" />
+      <path d="M9 12l2 2 4-4" />
+    </>
+  ),
 };
 
 function NavIcon({ name, active }) {
@@ -99,6 +105,7 @@ export default function BottomNav() {
     items.push({ href: '/admin/horario', label: 'Horario', icon: 'clock' });
     items.push({ href: '/admin/usuarios', label: 'Usuarios', icon: 'users' });
     items.push({ href: '/admin/colegio', label: 'Colegio', icon: 'door' });
+    items.push({ href: '/auditoria', label: 'Auditoría', icon: 'shield' });
   }
 
   return (
