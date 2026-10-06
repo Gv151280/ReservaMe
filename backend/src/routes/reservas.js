@@ -65,6 +65,13 @@ router.get('/todas', requireAuth, requireRole('directivo', 'administrador'), asy
   res.json({ reservas });
 });
 
+// Devuelve el bloqueo activo que se cruza con el rango en esa sala, o null.
+async function bloqueoEnRango(salaId, inicio, fin) {
+  return prisma.bloqueo.findFirst({
+    where: { salaId, activo: true, fechaInicio: { lt: fin }, fechaFin: { gt: inicio } },
+  });
+}
+
 // Filtra el equipamiento pedido para que solo queden ítems que la sala realmente
 // ofrece, y que el número pedido no supere el máximo configurado.
 function filtrarEquipamiento(itemsSala, solicitado) {
@@ -109,6 +116,8 @@ router.post('/', requireAuth, async (req, res) => {
     validarAnticipacion(inicio);
     await validarTipoUsoYHorario(req.user.colegioId, tipoUso, inicio, fin);
     await validarSinSolape(salaId, inicio, fin);
+    const bloqueo = await bloqueoEnRango(salaId, inicio, fin);
+    if (bloqueo) throw errorHttp(409, `La sala está bloqueada en ese horario: ${bloqueo.motivo}.`);
 
     const equipamiento = filtrarEquipamiento(sala.itemsEquipamiento, equipamientoSolicitado);
     const estado = tipoUso === 'clase' ? 'confirmada' : 'pendiente';
@@ -146,6 +155,8 @@ router.patch('/:id/aprobar', requireAuth, async (req, res) => {
     if (reserva.estado !== 'pendiente') throw errorHttp(400, 'Solo se pueden aprobar reservas pendientes.');
 
     await validarSinSolape(reserva.salaId, reserva.fechaInicio, reserva.fechaFin, reserva.id);
+    const bloqueo = await bloqueoEnRango(reserva.salaId, reserva.fechaInicio, reserva.fechaFin);
+    if (bloqueo) throw errorHttp(409, `La sala está bloqueada en ese horario: ${bloqueo.motivo}.`);
 
     const actualizada = await prisma.reserva.update({ where: { id: reserva.id }, data: { estado: 'confirmada' } });
     await notificarReservaAprobada({ reserva: actualizada, sala: reserva.sala });
