@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useSettings } from '../lib/useSettings';
 import { useToast } from './Toast';
 import { pushSoportado, suscripcionActual, activarPush, desactivarPush } from '../lib/push';
@@ -58,6 +59,11 @@ export default function SettingsMenu() {
               <button className={scaleIndex === 2 ? 'active' : ''} onClick={() => setScaleIndex(2)}>A+</button>
               <button className={scaleIndex === 3 ? 'active' : ''} onClick={() => setScaleIndex(3)}>A++</button>
             </div>
+          </div>
+          <div className="settings-row">
+            <Link href="/privacidad" onClick={() => setOpen(false)} style={{ color: 'var(--purple-dark)', textDecoration: 'none' }}>
+              Política de privacidad
+            </Link>
           </div>
         </div>
       )}
