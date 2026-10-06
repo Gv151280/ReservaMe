@@ -201,3 +201,19 @@ model PushSubscription {
 
   @@map("push_subscription")
 }
+
+// Registro de acciones sensibles (aprobar, rechazar, anular reservas; crear y revertir bloqueos).
+model AuditLog {
+  id            String   @id @default(uuid())
+  colegioId     String   @map("colegio_id")
+  usuarioId     String   @map("usuario_id")
+  usuarioNombre String   @map("usuario_nombre")
+  accion        String   // reserva.aprobar | reserva.rechazar | reserva.anular | bloqueo.crear | bloqueo.revertir
+  entidad       String   // reserva | bloqueo
+  entidadId     String   @map("entidad_id")
+  detalle       Json     @default("{}")
+  creadoEn      DateTime @default(now()) @map("creado_en")
+
+  @@index([colegioId, creadoEn])
+  @@map("audit_log")
+}
