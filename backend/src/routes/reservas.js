@@ -17,6 +17,7 @@ const {
   notificarReservaAprobada,
   notificarReservaRechazada,
 } = require('../lib/notificaciones');
+const { registrarAuditoria } = require('../lib/auditoria');
 
 const router = express.Router();
 
@@ -148,6 +149,16 @@ router.patch('/:id/aprobar', requireAuth, async (req, res) => {
 
     const actualizada = await prisma.reserva.update({ where: { id: reserva.id }, data: { estado: 'confirmada' } });
     await notificarReservaAprobada({ reserva: actualizada, sala: reserva.sala });
+
+    await registrarAuditoria({
+      colegioId: req.user.colegioId,
+      usuario: req.user,
+      accion: 'reserva.aprobar',
+      entidad: 'reserva',
+      entidadId: reserva.id,
+      detalle: { sala: reserva.sala.nombre, solicitanteId: reserva.usuarioId, fechaInicio: reserva.fechaInicio },
+    });
+
     res.json({ reserva: actualizada });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -162,11 +173,22 @@ router.patch('/:id/rechazar', requireAuth, async (req, res) => {
     if (!puedeGestionarSala(req.user, reserva.sala)) throw errorHttp(403, 'No tienes permiso para gestionar esta sala.');
     if (reserva.estado !== 'pendiente') throw errorHttp(400, 'Solo se pueden rechazar reservas pendientes.');
 
+    const motivo = req.body.motivo || null;
     const actualizada = await prisma.reserva.update({
       where: { id: reserva.id },
-      data: { estado: 'rechazada', motivoRechazo: req.body.motivo || null },
+      data: { estado: 'rechazada', motivoRechazo: motivo },
     });
     await notificarReservaRechazada({ reserva: actualizada, sala: reserva.sala });
+
+    await registrarAuditoria({
+      colegioId: req.user.colegioId,
+      usuario: req.user,
+      accion: 'reserva.rechazar',
+      entidad: 'reserva',
+      entidadId: reserva.id,
+      detalle: { sala: reserva.sala.nombre, solicitanteId: reserva.usuarioId, fechaInicio: reserva.fechaInicio, motivo },
+    });
+
     res.json({ reserva: actualizada });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -185,11 +207,20 @@ router.delete('/:id', requireAuth, async (req, res) => {
 
     const actualizada = await prisma.reserva.update({ where: { id: reserva.id }, data: { estado: 'cancelada' } });
 
-    // Si quien cancela no es el dueño de la reserva (un Admin o Directivo la anuló), avisarle.
+    // Si quien cancela no es el dueño de la reserva (un Admin o Directivo la anuló), avisarle y registrarlo.
     if (reserva.usuarioId !== req.user.id) {
       const mensaje = `${req.user.nombre} anuló tu reserva de ${reserva.sala.nombre} del ${new Date(reserva.fechaInicio).toLocaleDateString('es-CL')}.`;
       await crearNotificacion({ reservaId: reserva.id, destinatarioId: reserva.usuarioId, canal: 'push', mensaje });
       await crearNotificacion({ reservaId: reserva.id, destinatarioId: reserva.usuarioId, canal: 'email', mensaje });
+
+      await registrarAuditoria({
+        colegioId: req.user.colegioId,
+        usuario: req.user,
+        accion: 'reserva.anular',
+        entidad: 'reserva',
+        entidadId: reserva.id,
+        detalle: { sala: reserva.sala.nombre, solicitanteId: reserva.usuarioId, fechaInicio: reserva.fechaInicio },
+      });
     }
 
     res.json({ reserva: actualizada });
@@ -324,4 +355,5 @@ router.get('/recordatorios/procesar', async (req, res) => {
     res.status(err.status || 500).json({ error: err.message });
   }
 });
+
 module.exports = router;
