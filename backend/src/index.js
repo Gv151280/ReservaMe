@@ -29,6 +29,11 @@ app.use(cookieParser());
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
+// RUTA TEMPORAL DE PRUEBA — borrar después de confirmar que Sentry recibe errores.
+app.get('/prueba-sentry', () => {
+  throw new Error('Error de prueba para confirmar que Sentry está funcionando.');
+});
+
 app.use('/auth', authRoutes);
 app.use('/salas', salasRoutes);
 app.use('/reservas', reservasRoutes);
