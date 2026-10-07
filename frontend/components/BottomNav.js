@@ -101,17 +101,15 @@ export default function BottomNav() {
     items.push({ href: '/bloqueos', label: 'Bloqueos', icon: 'lock' });
   }
   if (tieneRol(user, 'administrador')) {
-    items.push({ href: '/admin/salas', label: 'Salas', icon: 'door' });
-    items.push({ href: '/admin/horario', label: 'Horario', icon: 'clock' });
-    items.push({ href: '/admin/usuarios', label: 'Usuarios', icon: 'users' });
-    items.push({ href: '/admin/colegio', label: 'Colegio', icon: 'door' });
+    items.push({ href: '/admin/panel', label: 'Datos colegio', icon: 'door' });
     items.push({ href: '/auditoria', label: 'Auditoría', icon: 'shield' });
   }
 
   return (
     <div className="bottom-nav">
       {items.map((it) => {
-        const active = router.pathname === it.href;
+        const esSeccionAdmin = it.href === '/admin/panel' && router.pathname.startsWith('/admin/');
+        const active = router.pathname === it.href || esSeccionAdmin;
         return (
           <Link key={it.href} href={it.href} className={`nav-item ${active ? 'active' : ''}`}>
             {it.count > 0 && <span className="nav-count">{it.count}</span>}
