@@ -14,7 +14,7 @@ const notificacionesRoutes = require('./routes/notificaciones');
 const bloqueosRoutes = require('./routes/bloqueos');
 const colegioRoutes = require('./routes/colegio');
 const pushRoutes = require('./routes/push');
-
+const mantenimientoRoutes = require('./routes/mantenimiento');
 
 const app = express();
 
@@ -37,6 +37,7 @@ app.use('/horario', horarioRoutes);
 app.use('/notificaciones', notificacionesRoutes);
 app.use('/colegio', colegioRoutes);
 app.use('/push', pushRoutes);
+app.use('/mantenimiento', mantenimientoRoutes);
 app.use('/bloqueos', bloqueosRoutes);
 
 // Envía a Sentry cualquier error no controlado de las rutas, antes del manejador genérico.
