@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import LogoMark from './LogoMark';
 import SettingsMenu from './SettingsMenu';
@@ -24,12 +24,29 @@ export default function Topbar() {
   const [notifs, setNotifs] = useState([]);
   const [colegio, setColegio] = useState(null);
   const noLeidas = notifs.filter((n) => !n.leida).length;
+  const panelRef = useRef(null);
+  const campanaRef = useRef(null);
 
   useEffect(() => {
     if (!user) return;
     api.get('/notificaciones/mias').then((d) => setNotifs(d.notificaciones)).catch(() => {});
     api.get('/colegio').then((d) => setColegio(d.colegio)).catch(() => {});
   }, [user]);
+
+  // Cierra el panel de notificaciones al hacer clic o tocar fuera de él.
+  useEffect(() => {
+    if (!open) return;
+    function cerrarSiFuera(e) {
+      if (panelRef.current?.contains(e.target) || campanaRef.current?.contains(e.target)) return;
+      setOpen(false);
+    }
+    document.addEventListener('mousedown', cerrarSiFuera);
+    document.addEventListener('touchstart', cerrarSiFuera);
+    return () => {
+      document.removeEventListener('mousedown', cerrarSiFuera);
+      document.removeEventListener('touchstart', cerrarSiFuera);
+    };
+  }, [open]);
 
   async function toggle() {
     const next = !open;
@@ -51,7 +68,7 @@ export default function Topbar() {
       </div>
       {colegio?.logoUrl && <img src={colegio.logoUrl} alt="" style={{ height: 30, width: 30, borderRadius: 8, objectFit: 'cover', marginLeft: 4 }} />}
       <div className="topbar-actions">
-        <button className="bell-btn" onClick={toggle} aria-label="Notificaciones">
+        <button ref={campanaRef} className="bell-btn" onClick={toggle} aria-label="Notificaciones">
           🔔{noLeidas > 0 && <span className="bell-dot" />}
         </button>
         <SettingsMenu />
@@ -60,7 +77,7 @@ export default function Topbar() {
         </div>
       </div>
       {open && (
-        <div className="notif-panel">
+        <div ref={panelRef} className="notif-panel">
           <h4>Notificaciones</h4>
           {notifs.length === 0 ? (
             <div className="notif-empty">Sin notificaciones por ahora.</div>
