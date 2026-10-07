@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSettings } from '../lib/useSettings';
 import { useToast } from './Toast';
@@ -11,11 +11,27 @@ export default function SettingsMenu() {
   const [pushOn, setPushOn] = useState(false);
   const [pushDisponible, setPushDisponible] = useState(false);
   const [cargandoPush, setCargandoPush] = useState(false);
+  const containerRef = useRef(null);
 
   useEffect(() => {
     pushSoportado().then(setPushDisponible);
     suscripcionActual().then((s) => setPushOn(!!s));
   }, []);
+
+  // Cierra el panel de Ajustes al hacer clic o tocar fuera de él.
+  useEffect(() => {
+    if (!open) return;
+    function cerrarSiFuera(e) {
+      if (containerRef.current?.contains(e.target)) return;
+      setOpen(false);
+    }
+    document.addEventListener('mousedown', cerrarSiFuera);
+    document.addEventListener('touchstart', cerrarSiFuera);
+    return () => {
+      document.removeEventListener('mousedown', cerrarSiFuera);
+      document.removeEventListener('touchstart', cerrarSiFuera);
+    };
+  }, [open]);
 
   async function togglePush() {
     setCargandoPush(true);
@@ -36,7 +52,7 @@ export default function SettingsMenu() {
   }
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={containerRef} style={{ position: 'relative' }}>
       <button className="bell-btn" onClick={() => setOpen((o) => !o)} aria-label="Ajustes">⚙️</button>
       {open && (
         <div className="notif-panel settings-panel">
