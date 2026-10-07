@@ -5,6 +5,13 @@ export default function Privacidad() {
 
   return (
     <div style={{ maxWidth: 680, margin: '0 auto', padding: '16px 4px 40px' }}>
+      <button
+        onClick={() => (window.history.length > 1 ? window.history.back() : (window.location.href = '/'))}
+        className="btn btn-ghost btn-sm"
+        style={{ marginBottom: 12 }}
+      >
+        ← Volver
+      </button>
       <h1 className="page-title">Política de privacidad</h1>
       <p className="page-sub">Última actualización: 06-10-2026 </p>
 
