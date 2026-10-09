@@ -367,6 +367,75 @@ router.get('/recordatorios/procesar', async (req, res) => {
   }
 });
 
+// GET /reservas/estadisticas?desde=ISO&hasta=ISO [solo administrador]
+// Agrega las reservas CONFIRMADAS del colegio: por sala, hora del día, día de la
+// semana y tipo de uso. Sirve para ver qué salas y horarios se usan más.
+router.get('/estadisticas', requireAuth, requireRole('administrador'), async (req, res) => {
+  try {
+    const { desde, hasta } = req.query;
+    const filtroFecha = {};
+    if (desde) {
+      const d = new Date(desde);
+      if (isNaN(d)) throw errorHttp(400, 'Parámetro "desde" inválido.');
+      filtroFecha.gte = d;
+    }
+    if (hasta) {
+      const h = new Date(hasta);
+      if (isNaN(h)) throw errorHttp(400, 'Parámetro "hasta" inválido.');
+      filtroFecha.lte = h;
+    }
+
+    const reservas = await prisma.reserva.findMany({
+      where: {
+        sala: { colegioId: req.user.colegioId },
+        estado: 'confirmada',
+        ...(Object.keys(filtroFecha).length ? { fechaInicio: filtroFecha } : {}),
+      },
+      include: { sala: true },
+    });
+
+    const TZ = 'America/Santiago';
+    const fmtHora = new Intl.DateTimeFormat('es-CL', { timeZone: TZ, hour: '2-digit', hour12: false });
+    const fmtDia = new Intl.DateTimeFormat('es-CL', { timeZone: TZ, weekday: 'long' });
+
+    const porSala = {};
+    const porHora = {};
+    const porDiaSemana = {};
+    const porTipoUso = { clase: 0, reunion_otro: 0 };
+
+    for (const r of reservas) {
+      const salaNombre = r.sala?.nombre || 'Sala eliminada';
+      porSala[salaNombre] = (porSala[salaNombre] || 0) + 1;
+
+      const hora = fmtHora.format(r.fechaInicio) + ':00';
+      porHora[hora] = (porHora[hora] || 0) + 1;
+
+      let dia = fmtDia.format(r.fechaInicio);
+      dia = dia.charAt(0).toUpperCase() + dia.slice(1);
+      porDiaSemana[dia] = (porDiaSemana[dia] || 0) + 1;
+
+      if (porTipoUso[r.tipoUso] !== undefined) porTipoUso[r.tipoUso]++;
+    }
+
+    const aArreglo = (obj) =>
+      Object.entries(obj)
+        .map(([nombre, cantidad]) => ({ nombre, cantidad }))
+        .sort((a, b) => b.cantidad - a.cantidad);
+
+    const ORDEN_DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+    res.json({
+      total: reservas.length,
+      porSala: aArreglo(porSala),
+      porHora: aArreglo(porHora).sort((a, b) => a.nombre.localeCompare(b.nombre)),
+      porDiaSemana: ORDEN_DIAS.filter((d) => porDiaSemana[d]).map((d) => ({ nombre: d, cantidad: porDiaSemana[d] })),
+      porTipoUso,
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
 
 // GET /reservas/auditoria?accion=... [solo administrador]
