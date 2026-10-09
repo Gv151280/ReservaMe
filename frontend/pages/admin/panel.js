@@ -5,6 +5,7 @@ const SECCIONES = [
   { href: '/admin/horario', titulo: 'Horario', desc: 'Horas de clase y horario institucional por día.', icon: '🕐' },
   { href: '/admin/salas', titulo: 'Salas', desc: 'Salas disponibles, encargados y equipamiento.', icon: '🚪' },
   { href: '/admin/usuarios', titulo: 'Usuarios', desc: 'Roles de cada persona del colegio.', icon: '👥' },
+  { href: '/estadisticas', titulo: 'Estadísticas', desc: 'Uso de salas: por sala, hora, día y tipo.', icon: '📊' },
 ];
 
 export default function AdminPanel() {
