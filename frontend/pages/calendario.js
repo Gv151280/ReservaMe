@@ -30,6 +30,7 @@ const COLORES = {
   pendiente: 'var(--purple-light, #d9c8f0)',
   bloqueo: 'var(--coral, #e86a5c)',
 };
+const ETIQUETAS = { confirmada: 'Reservada', pendiente: 'Pendiente', bloqueo: 'Bloqueada' };
 
 export default function Calendario() {
   const { showToast } = useToast();
@@ -88,9 +89,8 @@ export default function Calendario() {
 
   const inicioJornada = dia.horaInicio;
   const finJornada = dia.horaSalidaProfesores;
-  const rango = finJornada - inicioJornada;
 
-  if (rango <= 0) {
+  if (finJornada - inicioJornada <= 0) {
     return (
       <div>
         <h1 className="page-title">Disponibilidad de salas</h1>
@@ -100,6 +100,7 @@ export default function Calendario() {
     );
   }
 
+  // Línea de tiempo institucional, como filas: horas de clase y recreos entre ellas.
   const segmentos = [];
   let cursor = inicioJornada;
   dia.bloques.forEach((b, i) => {
@@ -112,7 +113,12 @@ export default function Calendario() {
     if (s.tipo === 'fuera' && i > 0 && i < segmentos.length - 1) s.tipo = 'recreo';
   });
 
-  const pos = (min) => ((Math.min(Math.max(min, inicioJornada), finJornada) - inicioJornada) / rango) * 100;
+  // Para una sala y un segmento, busca qué ocupaciones se cruzan con ese tramo.
+  function ocupacionesEnSegmento(sala, seg) {
+    return sala.ocupaciones
+      .map((o) => ({ ...o, inicioMin: minutosDeISO(o.inicio), finMin: minutosDeISO(o.fin) }))
+      .filter((o) => o.finMin > seg.inicio && o.inicioMin < seg.fin);
+  }
 
   return (
     <div>
@@ -120,98 +126,65 @@ export default function Calendario() {
       <p className="page-sub">Jornada del día: {fmtMin(inicioJornada)} a {fmtMin(finJornada)}.</p>
       {SelectorFecha}
 
-      <div style={{ display: 'flex', paddingLeft: 110, marginBottom: 4 }}>
-        <div style={{ position: 'relative', flex: 1, height: 28 }}>
-          {segmentos.map((s, i) => (
-            <div
-              key={i}
-              title={
-                s.tipo === 'clase'
-                  ? `Hora ${s.numero}: ${fmtMin(s.inicio)}–${fmtMin(s.fin)}`
-                  : s.tipo === 'recreo'
-                  ? `Recreo: ${fmtMin(s.inicio)}–${fmtMin(s.fin)}`
-                  : 'Fuera de horario de clases'
-              }
-              style={{
-                position: 'absolute',
-                left: `${pos(s.inicio)}%`,
-                width: `${pos(s.fin) - pos(s.inicio)}%`,
-                top: 0,
-                bottom: 0,
-                background: s.tipo === 'clase' ? 'var(--gray-light, #eee)' : s.tipo === 'recreo' ? '#fde9c8' : 'transparent',
-                border: s.tipo === 'clase' ? '1px solid var(--gray, #ccc)' : 'none',
-                borderRadius: 4,
-                fontSize: 9.5,
-                color: 'var(--gray-dark, #555)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {s.tipo === 'clase' ? `H${s.numero}` : s.tipo === 'recreo' ? 'Recreo' : ''}
-            </div>
-          ))}
-        </div>
-      </div>
-
       {salas.length === 0 ? (
         <div className="empty-state"><div className="em">🚪</div><p>No hay salas activas.</p></div>
       ) : (
-        salas.map((sala) => (
-          <div key={sala.id} className="admin-card" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 100, fontSize: 13, fontWeight: 600 }}>{sala.nombre}</div>
-            <div style={{ position: 'relative', flex: 1, height: 34, background: '#fafafa', border: '1px solid var(--gray-light, #eee)', borderRadius: 6, overflow: 'hidden' }}>
-              {segmentos.filter((s) => s.tipo === 'recreo').map((s, i) => (
-                <div
-                  key={`r${i}`}
-                  style={{
-                    position: 'absolute',
-                    left: `${pos(s.inicio)}%`,
-                    width: `${pos(s.fin) - pos(s.inicio)}%`,
-                    top: 0,
-                    bottom: 0,
-                    background: '#fdf3df',
-                  }}
-                />
-              ))}
-              {sala.ocupaciones.map((o, i) => {
-                const inicioMin = minutosDeISO(o.inicio);
-                const finMin = minutosDeISO(o.fin);
-                if (finMin <= inicioJornada || inicioMin >= finJornada) return null;
-                const color = o.tipo === 'bloqueo' ? COLORES.bloqueo : COLORES[o.estado] || COLORES.confirmada;
-                return (
-                  <div
-                    key={i}
-                    title={`${o.titulo} (${fmtMin(inicioMin)}–${fmtMin(finMin)})`}
-                    style={{
-                      position: 'absolute',
-                      left: `${pos(inicioMin)}%`,
-                      width: `${pos(finMin) - pos(inicioMin)}%`,
-                      top: 2,
-                      bottom: 2,
-                      background: color,
-                      borderRadius: 4,
-                      fontSize: 10,
-                      color: '#fff',
-                      overflow: 'hidden',
-                      whiteSpace: 'nowrap',
-                      padding: '2px 4px',
-                    }}
-                  >
-                    {fmtMin(inicioMin)}
-                  </div>
-                );
-              })}
+        segmentos.map((seg, i) => (
+          <div key={i} className="admin-card" style={{ borderLeft: seg.tipo === 'recreo' ? '4px solid #f0b94d' : '4px solid var(--purple)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+              <strong style={{ fontSize: 14 }}>
+                {seg.tipo === 'clase' ? `Hora ${seg.numero}` : seg.tipo === 'recreo' ? 'Recreo' : 'Fuera de horario'}
+              </strong>
+              <span className="sala-meta" style={{ margin: 0 }}>{fmtMin(seg.inicio)} – {fmtMin(seg.fin)}</span>
             </div>
+
+            {salas.map((sala) => {
+              const ocupaciones = ocupacionesEnSegmento(sala, seg);
+              return (
+                <div
+                  key={sala.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '6px 8px',
+                    marginTop: 4,
+                    borderRadius: 6,
+                    background: ocupaciones.length ? '#faf8fc' : '#f4fbf5',
+                  }}
+                >
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{sala.nombre}</span>
+                  {ocupaciones.length === 0 ? (
+                    <span style={{ fontSize: 12, color: 'var(--gray, #888)' }}>Libre</span>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                      {ocupaciones.map((o, j) => (
+                        <span
+                          key={j}
+                          style={{
+                            fontSize: 11,
+                            color: '#fff',
+                            background: o.tipo === 'bloqueo' ? COLORES.bloqueo : COLORES[o.estado] || COLORES.confirmada,
+                            borderRadius: 4,
+                            padding: '2px 6px',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={o.titulo}
+                        >
+                          {o.tipo === 'bloqueo' ? 'Bloqueada' : ETIQUETAS[o.estado]}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ))
       )}
 
       <div style={{ display: 'flex', gap: 14, fontSize: 12, marginTop: 10, flexWrap: 'wrap' }}>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#fde9c8', borderRadius: 3, marginRight: 4 }} />Recreo</span>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: COLORES.confirmada, borderRadius: 3, marginRight: 4 }} />Confirmada</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: COLORES.confirmada, borderRadius: 3, marginRight: 4 }} />Reservada</span>
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: COLORES.pendiente, borderRadius: 3, marginRight: 4 }} />Pendiente</span>
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: COLORES.bloqueo, borderRadius: 3, marginRight: 4 }} />Bloqueada</span>
       </div>
