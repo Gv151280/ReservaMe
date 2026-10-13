@@ -436,6 +436,78 @@ router.get('/estadisticas', requireAuth, requireRole('administrador'), async (re
   }
 });
 
+// GET /reservas/calendario?desde=ISO&hasta=ISO
+// Devuelve, por cada sala activa del colegio, las reservas (pendientes y confirmadas)
+// y los bloqueos activos que caen dentro del rango. Pensado para un solo día.
+router.get('/calendario', requireAuth, async (req, res) => {
+  try {
+    const { desde, hasta } = req.query;
+    let inicioDia, finDia;
+    if (desde && hasta) {
+      inicioDia = new Date(desde);
+      finDia = new Date(hasta);
+      if (isNaN(inicioDia) || isNaN(finDia)) throw errorHttp(400, 'Parámetros de fecha inválidos.');
+    } else {
+      const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date());
+      inicioDia = new Date(`${hoy}T00:00:00`);
+      finDia = new Date(`${hoy}T23:59:59`);
+    }
+
+    const salas = await prisma.sala.findMany({
+      where: { colegioId: req.user.colegioId, activa: true },
+      orderBy: { nombre: 'asc' },
+    });
+
+    const reservas = await prisma.reserva.findMany({
+      where: {
+        sala: { colegioId: req.user.colegioId },
+        estado: { in: ['pendiente', 'confirmada'] },
+        fechaInicio: { lt: finDia },
+        fechaFin: { gt: inicioDia },
+      },
+      include: { usuario: { select: { nombre: true } } },
+    });
+
+    const bloqueos = await prisma.bloqueo.findMany({
+      where: {
+        sala: { colegioId: req.user.colegioId },
+        activo: true,
+        fechaInicio: { lt: finDia },
+        fechaFin: { gt: inicioDia },
+      },
+    });
+
+    const resultado = salas.map((sala) => {
+      const ocupaciones = [
+        ...reservas
+          .filter((r) => r.salaId === sala.id)
+          .map((r) => ({
+            tipo: 'reserva',
+            estado: r.estado,
+            inicio: r.fechaInicio,
+            fin: r.fechaFin,
+            titulo: `${r.tipoUso === 'clase' ? 'Clase' : 'Reunión'} · ${r.usuario?.nombre || ''}`,
+          })),
+        ...bloqueos
+          .filter((b) => b.salaId === sala.id)
+          .map((b) => ({
+            tipo: 'bloqueo',
+            estado: 'bloqueado',
+            inicio: b.fechaInicio,
+            fin: b.fechaFin,
+            titulo: `Bloqueado: ${b.motivo}`,
+          })),
+      ].sort((a, b) => new Date(a.inicio) - new Date(b.inicio));
+
+      return { id: sala.id, nombre: sala.nombre, ocupaciones };
+    });
+
+    res.json({ salas: resultado });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
 
 // GET /reservas/auditoria?accion=... [solo administrador]
