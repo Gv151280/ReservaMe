@@ -12,6 +12,14 @@ const ICONS = {
       <path d="M4 10h16M8 3v4M16 3v4" />
     </>
   ),
+  grid: (
+    <>
+      <rect x="4" y="4" width="7" height="7" rx="1" />
+      <rect x="13" y="4" width="7" height="7" rx="1" />
+      <rect x="4" y="13" width="7" height="7" rx="1" />
+      <rect x="13" y="13" width="7" height="7" rx="1" />
+    </>
+  ),
   check: (
     <>
       <circle cx="12" cy="12" r="9" />
@@ -89,6 +97,7 @@ export default function BottomNav() {
   const items = [
     { href: '/', label: 'Inicio', icon: 'home' },
     { href: '/mis-reservas', label: 'Mis reservas', icon: 'cal' },
+    { href: '/calendario', label: 'Disponibilidad', icon: 'grid' },
   ];
   if (tieneRol(user, 'encargado_sala') || tieneRol(user, 'administrador')) {
     items.push({ href: '/pendientes', label: 'Pendientes', icon: 'check', count: pendientesCount });
