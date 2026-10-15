@@ -217,3 +217,21 @@ model AuditLog {
   @@index([colegioId, creadoEn])
   @@map("audit_log")
 }
+
+
+// Lista de espera: alguien pide que le avisen si una sala se libera en un horario
+// que hoy está ocupado. No reserva automáticamente, solo notifica.
+model ListaEspera {
+  id          String   @id @default(uuid())
+  colegioId   String   @map("colegio_id")
+  salaId      String   @map("sala_id")
+  salaNombre  String   @map("sala_nombre")
+  usuarioId   String   @map("usuario_id")
+  fechaInicio DateTime @map("fecha_inicio")
+  fechaFin    DateTime @map("fecha_fin")
+  notificado  Boolean  @default(false)
+  creadoEn    DateTime @default(now()) @map("creado_en")
+
+  @@index([salaId, fechaInicio, fechaFin, notificado])
+  @@map("lista_espera")
+}
