@@ -24,6 +24,12 @@ function minutosDeISO(iso) {
   const m = Number(partes.find((p) => p.type === 'minute').value);
   return h * 60 + m;
 }
+// Construye un Date a partir de un día (AAAA-MM-DD) y minutos desde medianoche,
+// asumiendo que el navegador está en hora de Chile (igual criterio que el resto de la app).
+function fechaDeMinutos(fechaISO, minutos) {
+  const base = new Date(`${fechaISO}T00:00:00`);
+  return new Date(base.getTime() + minutos * 60000);
+}
 
 const COLORES = {
   confirmada: 'var(--purple)',
@@ -37,16 +43,22 @@ export default function Calendario() {
   const [fecha, setFecha] = useState(hoyISO());
   const [horario, setHorario] = useState(null);
   const [salas, setSalas] = useState(null);
+  const [misEsperas, setMisEsperas] = useState([]);
 
   function cargar() {
     setHorario(null);
     setSalas(null);
     const desde = new Date(`${fecha}T00:00:00`).toISOString();
     const hasta = new Date(`${fecha}T23:59:59`).toISOString();
-    Promise.all([api.get('/horario'), api.get(`/reservas/calendario?desde=${desde}&hasta=${hasta}`)])
-      .then(([h, c]) => {
+    Promise.all([
+      api.get('/horario'),
+      api.get(`/reservas/calendario?desde=${desde}&hasta=${hasta}`),
+      api.get('/reservas/lista-espera/mia'),
+    ])
+      .then(([h, c, e]) => {
         setHorario(h.dias);
         setSalas(c.salas);
+        setMisEsperas(e.entradas);
       })
       .catch((e) => {
         showToast(e.message, 'error');
@@ -55,6 +67,23 @@ export default function Calendario() {
       });
   }
   useEffect(cargar, [fecha]);
+
+  async function unirseLista(sala, seg) {
+    try {
+      const inicio = fechaDeMinutos(fecha, seg.inicio).toISOString();
+      const fin = fechaDeMinutos(fecha, seg.fin).toISOString();
+      await api.post('/reservas/lista-espera', { salaId: sala.id, fechaInicio: inicio, fechaFin: fin });
+      showToast('Te avisaremos si esta sala se libera.', 'success');
+      cargar();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  function yaEnLista(salaId, seg) {
+    const iso = fechaDeMinutos(fecha, seg.inicio).toISOString();
+    return misEsperas.some((e) => e.salaId === salaId && new Date(e.fechaInicio).toISOString() === iso);
+  }
 
   const SelectorFecha = (
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', margin: '12px 0' }}>
@@ -100,7 +129,6 @@ export default function Calendario() {
     );
   }
 
-  // Línea de tiempo institucional, como filas: horas de clase y recreos entre ellas.
   const segmentos = [];
   let cursor = inicioJornada;
   dia.bloques.forEach((b, i) => {
@@ -113,7 +141,6 @@ export default function Calendario() {
     if (s.tipo === 'fuera' && i > 0 && i < segmentos.length - 1) s.tipo = 'recreo';
   });
 
-  // Para una sala y un segmento, busca qué ocupaciones se cruzan con ese tramo.
   function ocupacionesEnSegmento(sala, seg) {
     return sala.ocupaciones
       .map((o) => ({ ...o, inicioMin: minutosDeISO(o.inicio), finMin: minutosDeISO(o.fin) }))
@@ -140,40 +167,51 @@ export default function Calendario() {
 
             {salas.map((sala) => {
               const ocupaciones = ocupacionesEnSegmento(sala, seg);
+              const enLista = ocupaciones.length > 0 && yaEnLista(sala.id, seg);
               return (
                 <div
                   key={sala.id}
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
                     padding: '6px 8px',
                     marginTop: 4,
                     borderRadius: 6,
                     background: ocupaciones.length ? '#faf8fc' : '#f4fbf5',
                   }}
                 >
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>{sala.nombre}</span>
-                  {ocupaciones.length === 0 ? (
-                    <span style={{ fontSize: 12, color: 'var(--gray, #888)' }}>Libre</span>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                      {ocupaciones.map((o, j) => (
-                        <span
-                          key={j}
-                          style={{
-                            fontSize: 11,
-                            color: '#fff',
-                            background: o.tipo === 'bloqueo' ? COLORES.bloqueo : COLORES[o.estado] || COLORES.confirmada,
-                            borderRadius: 4,
-                            padding: '2px 6px',
-                            whiteSpace: 'nowrap',
-                          }}
-                          title={o.titulo}
-                        >
-                          {o.tipo === 'bloqueo' ? 'Bloqueada' : ETIQUETAS[o.estado]}
-                        </span>
-                      ))}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{sala.nombre}</span>
+                    {ocupaciones.length === 0 ? (
+                      <span style={{ fontSize: 12, color: 'var(--gray, #888)' }}>Libre</span>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                        {ocupaciones.map((o, j) => (
+                          <span
+                            key={j}
+                            style={{
+                              fontSize: 11,
+                              color: '#fff',
+                              background: o.tipo === 'bloqueo' ? COLORES.bloqueo : COLORES[o.estado] || COLORES.confirmada,
+                              borderRadius: 4,
+                              padding: '2px 6px',
+                              whiteSpace: 'nowrap',
+                            }}
+                            title={o.titulo}
+                          >
+                            {o.tipo === 'bloqueo' ? 'Bloqueada' : ETIQUETAS[o.estado]}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {ocupaciones.length > 0 && (
+                    <div style={{ textAlign: 'right', marginTop: 4 }}>
+                      {enLista ? (
+                        <span style={{ fontSize: 11, color: 'var(--purple-dark)' }}>✓ En lista de espera</span>
+                      ) : (
+                        <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => unirseLista(sala, seg)}>
+                          Avisarme si se libera
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
