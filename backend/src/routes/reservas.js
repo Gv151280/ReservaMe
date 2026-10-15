@@ -190,7 +190,10 @@ router.patch('/:id/rechazar', requireAuth, async (req, res) => {
       where: { id: reserva.id },
       data: { estado: 'rechazada', motivoRechazo: motivo },
     });
+    
     await notificarReservaRechazada({ reserva: actualizada, sala: reserva.sala });
+
+    await avisarListaEspera({ salaId: reserva.salaId, salaNombre: reserva.sala.nombre, fechaInicio: reserva.fechaInicio, fechaFin: reserva.fechaFin });
 
     await registrarAuditoria({
       colegioId: req.user.colegioId,
@@ -511,6 +514,52 @@ router.get('/calendario', requireAuth, async (req, res) => {
   }
 });
 
+// POST /reservas/lista-espera -> anotarse para que avisen si un horario se libera.
+// body: { salaId, fechaInicio, fechaFin }
+router.post('/lista-espera', requireAuth, async (req, res) => {
+  try {
+    const { salaId, fechaInicio, fechaFin } = req.body;
+    if (!salaId || !fechaInicio || !fechaFin) {
+      throw errorHttp(400, 'Faltan campos: salaId, fechaInicio, fechaFin.');
+    }
+    const sala = await prisma.sala.findFirst({ where: { id: salaId, colegioId: req.user.colegioId, activa: true } });
+    if (!sala) throw errorHttp(404, 'Sala no encontrada o inactiva.');
+
+    const inicio = new Date(fechaInicio);
+    const fin = new Date(fechaFin);
+    if (isNaN(inicio) || isNaN(fin) || fin <= inicio) throw errorHttp(400, 'Horario inválido.');
+
+    const existente = await prisma.listaEspera.findFirst({
+      where: { usuarioId: req.user.id, salaId, fechaInicio: inicio, fechaFin: fin, notificado: false },
+    });
+    if (existente) throw errorHttp(400, 'Ya estás en la lista de espera para ese horario.');
+
+    const entrada = await prisma.listaEspera.create({
+      data: { colegioId: req.user.colegioId, salaId, salaNombre: sala.nombre, usuarioId: req.user.id, fechaInicio: inicio, fechaFin: fin },
+    });
+    res.status(201).json({ entrada });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// GET /reservas/lista-espera/mia -> mis horarios en espera, sin avisar todavía.
+router.get('/lista-espera/mia', requireAuth, async (req, res) => {
+  const entradas = await prisma.listaEspera.findMany({
+    where: { usuarioId: req.user.id, notificado: false },
+    orderBy: { fechaInicio: 'asc' },
+  });
+  res.json({ entradas });
+});
+
+// DELETE /reservas/lista-espera/:id -> salir de la lista de espera (propia).
+router.delete('/lista-espera/:id', requireAuth, async (req, res) => {
+  const entrada = await prisma.listaEspera.findUnique({ where: { id: req.params.id } });
+  if (!entrada) return res.status(404).json({ error: 'No encontrada.' });
+  if (entrada.usuarioId !== req.user.id) return res.status(403).json({ error: 'No puedes salir de la lista de espera de otra persona.' });
+  await prisma.listaEspera.delete({ where: { id: entrada.id } });
+  res.json({ ok: true });
+});
 module.exports = router;
 
 // GET /reservas/auditoria?accion=... [solo administrador]
