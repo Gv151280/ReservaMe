@@ -14,8 +14,19 @@ export default function MisReservas() {
 
   function cargar() {
     api.get('/reservas/mias').then((d) => setReservas(d.reservas)).catch((e) => showToast(e.message, 'error'));
+    api.get('/reservas/lista-espera/mia').then((d) => setEsperas(d.entradas)).catch(() => {});
   }
   useEffect(cargar, []);
+
+  async function salirDeEspera(id) {
+    try {
+      await api.del(`/reservas/lista-espera/${id}`);
+      setEsperas((prev) => prev.filter((e) => e.id !== id));
+      showToast('Saliste de la lista de espera.', 'info');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
 
   if (reservas === null) return <p className="page-sub">Cargando reservas…</p>;
 
@@ -105,6 +116,22 @@ export default function MisReservas() {
             </div>
           );
         })
+      )}
+
+      {esperas.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <h3 style={{ fontSize: 14.5, margin: '0 0 8px' }}>Lista de espera</h3>
+          {esperas.map((e) => (
+            <div className="reserva-item" key={e.id}>
+              <div className="reserva-meta">
+                {e.salaNombre} · {fmtFechaLarga(todayISOFromDate(e.fechaInicio))} · {fmtHora(e.fechaInicio)}–{fmtHora(e.fechaFin)}
+              </div>
+              <div className="reserva-actions">
+                <button className="btn btn-ghost btn-sm" onClick={() => salirDeEspera(e.id)}>Salir de la lista</button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {confirmarCancelarId && (
