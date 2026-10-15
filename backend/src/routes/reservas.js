@@ -18,6 +18,7 @@ const {
   notificarReservaRechazada,
 } = require('../lib/notificaciones');
 const { registrarAuditoria } = require('../lib/auditoria');
+const { avisarListaEspera } = require('../lib/listaEspera');
 
 const router = express.Router();
 
