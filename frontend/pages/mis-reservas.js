@@ -8,6 +8,7 @@ import Badge from '../components/Badge';
 export default function MisReservas() {
   const { showToast } = useToast();
   const [reservas, setReservas] = useState(null);
+  const [esperas, setEsperas] = useState([]);
   const [tab, setTab] = useState('proximas');
   const [confirmarCancelarId, setConfirmarCancelarId] = useState(null);
 
