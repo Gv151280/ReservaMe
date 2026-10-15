@@ -127,7 +127,6 @@ router.patch('/:id/revertir', requireAuth, async (req, res) => {
     await avisarListaEspera({ salaId: bloqueo.salaId, salaNombre: bloqueo.sala?.nombre, fechaInicio: bloqueo.fechaInicio, fechaFin: bloqueo.fechaFin });
 
     await registrarAuditoria({
-    
       colegioId: req.user.colegioId,
       usuario: req.user,
       accion: 'bloqueo.revertir',
