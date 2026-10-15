@@ -218,7 +218,11 @@ router.delete('/:id', requireAuth, async (req, res) => {
     }
 
     const actualizada = await prisma.reserva.update({ where: { id: reserva.id }, data: { estado: 'cancelada' } });
+    const actualizada = await prisma.reserva.update({ where: { id: reserva.id }, data: { estado: 'cancelada' } });
 
+    await avisarListaEspera({ salaId: reserva.salaId, salaNombre: reserva.sala.nombre, fechaInicio: reserva.fechaInicio, fechaFin: reserva.fechaFin });
+
+    // Si quien cancela no es el dueño de la reserva (un Admin o Directivo la anuló), avisarle y registrarlo.
     // Si quien cancela no es el dueño de la reserva (un Admin o Directivo la anuló), avisarle y registrarlo.
     if (reserva.usuarioId !== req.user.id) {
       const mensaje = `${req.user.nombre} anuló tu reserva de ${reserva.sala.nombre} del ${new Date(reserva.fechaInicio).toLocaleDateString('es-CL')}.`;
