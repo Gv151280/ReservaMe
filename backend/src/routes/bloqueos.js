@@ -4,6 +4,7 @@ const { requireAuth } = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
 const { validarAnticipacion, puedeRevertirBloqueo } = require('../lib/validaciones');
 const { registrarAuditoria } = require('../lib/auditoria');
+const { avisarListaEspera } = require('../lib/listaEspera');
 const { crearNotificacion } = require('../lib/notificaciones');
 
 const router = express.Router();
@@ -123,7 +124,10 @@ router.patch('/:id/revertir', requireAuth, async (req, res) => {
       data: { activo: false, revertidoPorId: req.user.id, revertidoEn: new Date() },
     });
 
+    await avisarListaEspera({ salaId: bloqueo.salaId, salaNombre: bloqueo.sala?.nombre, fechaInicio: bloqueo.fechaInicio, fechaFin: bloqueo.fechaFin });
+
     await registrarAuditoria({
+    
       colegioId: req.user.colegioId,
       usuario: req.user,
       accion: 'bloqueo.revertir',
