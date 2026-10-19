@@ -50,6 +50,34 @@ router.get('/callback', async (req, res) => {
   }
 });
 
+// GET /auth/confirmar?token=...  -> versión JSON del callback, pensada para que
+// el FRONTEND la llame con fetch desde /auth/confirmar, en vez de que el correo
+// lleve al usuario directo al dominio del backend (eso dispara falsos positivos
+// de "sitio peligroso" en Chrome, por verse igual a un link de phishing).
+router.get('/confirmar', async (req, res) => {
+  try {
+    const { email } = await proveedorActivo().verify(req.query);
+
+    const usuario = await prisma.usuario.findUnique({
+      where: { emailInstitucional: email },
+      include: { roles: { include: { rol: true } } },
+    });
+
+    if (!usuario) {
+      throw Object.assign(
+        new Error('Tu correo no está autorizado. Contacta al administrador del colegio.'),
+        { status: 403 }
+      );
+    }
+
+    const token = firmarSesion(usuario.id);
+    setCookieSesion(res, token);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 // GET /auth/me -> hidrata la sesión en el frontend al cargar la app.
 router.get('/me', attachUserIfPresent, (req, res) => {
   if (!req.user) return res.json({ user: null });
