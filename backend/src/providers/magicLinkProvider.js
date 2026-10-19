@@ -24,7 +24,7 @@ async function initiate({ email }) {
     data: { email: emailNormalizado, token, expiresAt },
   });
 
-  const link = backendCallbackUrl(token);
+  const link = frontendCallbackUrl(token);
 
   await sendEmail({
     to: emailNormalizado,
@@ -38,10 +38,9 @@ async function initiate({ email }) {
   return { sent: true, devLink };
 }
 
-function backendCallbackUrl(token) {
-  const port = process.env.PORT || 4000;
-  const base = process.env.BACKEND_PUBLIC_URL || `http://localhost:${port}`;
-  return `${base}/auth/callback?token=${token}`;
+function frontendCallbackUrl(token) {
+  const base = process.env.FRONTEND_URL || 'http://localhost:3000';
+  return `${base}/auth/confirmar?token=${token}`;
 }
 
 // Paso 2: el usuario vuelve con el token -> se valida, se marca usado, y se
