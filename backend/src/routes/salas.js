@@ -175,4 +175,66 @@ router.patch('/:id', requireAuth, async (req, res) => {
   res.json({ sala: actualizada });
 });
 
+// GET /salas/:id/estado-publico -> estado actual de la sala, SIN login.
+// Pensado para una página pegada en la puerta (vía QR): solo dice si está
+// ocupada ahora mismo y hasta qué hora, sin exponer quién la reservó.
+router.get('/:id/estado-publico', async (req, res) => {
+  const sala = await prisma.sala.findFirst({
+    where: { id: req.params.id, activa: true },
+    include: { colegio: { select: { nombre: true } } },
+  });
+  if (!sala) return res.status(404).json({ error: 'Sala no encontrada.' });
+
+  const ahora = new Date();
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(ahora);
+  const obtener = (tipo) => Number(partes.find((p) => p.type === tipo).value);
+  const fechaISO = `${obtener('year')}-${String(obtener('month')).padStart(2, '0')}-${String(obtener('day')).padStart(2, '0')}`;
+  const ahoraMin = obtener('hour') * 60 + obtener('minute');
+
+  const cfg = await horarioDelDia(sala.colegioId, fechaISO);
+  const { inicio, fin } = inicioFinDelDia(fechaISO);
+
+  const ocupaciones = [
+    ...(await prisma.reserva.findMany({
+      where: { salaId: sala.id, estado: { in: ['pendiente', 'confirmada'] }, fechaInicio: { lt: fin }, fechaFin: { gt: inicio } },
+      select: { fechaInicio: true, fechaFin: true },
+    })),
+    ...(await prisma.bloqueo.findMany({
+      where: { salaId: sala.id, activo: true, fechaInicio: { lt: fin }, fechaFin: { gt: inicio } },
+      select: { fechaInicio: true, fechaFin: true },
+    })),
+  ];
+
+  const fmtHoraLocal = (date) =>
+    new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', hour: '2-digit', minute: '2-digit', hour12: false }).format(date);
+
+  const ocupacionActual = ocupaciones.find((o) => o.fechaInicio <= ahora && o.fechaFin > ahora);
+
+  if (ocupacionActual) {
+    return res.json({
+      sala: sala.nombre,
+      colegio: sala.colegio?.nombre || null,
+      ocupada: true,
+      hasta: fmtHoraLocal(ocupacionActual.fechaFin),
+      actualizadoEn: ahora.toISOString(),
+    });
+  }
+
+  // Libre ahora: busca cuándo vuelve a ocuparse hoy, si corresponde.
+  const proxima = ocupaciones
+    .filter((o) => o.fechaInicio > ahora)
+    .sort((a, b) => a.fechaInicio - b.fechaInicio)[0];
+
+  res.json({
+    sala: sala.nombre,
+    colegio: sala.colegio?.nombre || null,
+    ocupada: false,
+    libreHasta: proxima ? fmtHoraLocal(proxima.fechaInicio) : null,
+    actualizadoEn: ahora.toISOString(),
+  });
+});
+
 module.exports = router;
