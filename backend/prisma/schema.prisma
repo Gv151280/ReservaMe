@@ -235,3 +235,22 @@ model ListaEspera {
   @@index([salaId, fechaInicio, fechaFin, notificado])
   @@map("lista_espera")
 }
+
+// Reporte de un problema de equipamiento en una sala (ej. "el proyector no sirve").
+// Lo crea cualquier usuario autenticado; lo resuelve el encargado de la sala o el admin.
+model Incidencia {
+  id            String    @id @default(uuid())
+  colegioId     String    @map("colegio_id")
+  salaId        String    @map("sala_id")
+  salaNombre    String    @map("sala_nombre")
+  reportadoPorId String   @map("reportado_por_id")
+  reportadoPorNombre String @map("reportado_por_nombre")
+  descripcion   String
+  resuelta      Boolean   @default(false)
+  resueltoPorId String?   @map("resuelto_por_id")
+  resueltoEn    DateTime? @map("resuelto_en")
+  creadoEn      DateTime  @default(now()) @map("creado_en")
+
+  @@index([salaId, resuelta])
+  @@map("incidencia")
+}
