@@ -8,7 +8,7 @@ import Topbar from '../components/Topbar';
 import BottomNav from '../components/BottomNav';
 
 // Rutas accesibles con o sin sesión (sin barra superior ni menú inferior).
-const RUTAS_LIBRES = ['/privacidad'];
+const RUTAS_LIBRES = ['/privacidad', '/sala/[id]'];
 // Rutas que solo se ven sin sesión (si hay sesión, se redirige a /).
 const RUTAS_SOLO_SIN_SESION = ['/login', '/auth/confirmar'];
 
