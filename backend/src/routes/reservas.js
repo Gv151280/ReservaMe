@@ -560,6 +560,70 @@ router.delete('/lista-espera/:id', requireAuth, async (req, res) => {
   await prisma.listaEspera.delete({ where: { id: entrada.id } });
   res.json({ ok: true });
 });
+
+// GET /reservas/recordatorios-pendientes/procesar
+// Lo llama cron-job.org con el header x-cron-secret (sugerido: cada 6 horas).
+// Reenvía el aviso, UNA sola vez, a quien debe aprobar una reunión que lleva
+// más de 24 horas pendiente sin respuesta.
+router.get('/recordatorios-pendientes/procesar', async (req, res) => {
+  const secreto = process.env.CRON_SECRET;
+  if (!secreto || req.get('x-cron-secret') !== secreto) {
+    return res.status(401).json({ error: 'No autorizado.' });
+  }
+  try {
+    const limite = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const candidatas = await prisma.reserva.findMany({
+      where: {
+        estado: 'pendiente',
+        recordatorioPendienteEnviado: false,
+        creadoEn: { lte: limite },
+      },
+      include: {
+        sala: true,
+        usuario: { select: { nombre: true } },
+      },
+    });
+
+    const fmtFechaHora = new Intl.DateTimeFormat('es-CL', {
+      timeZone: 'America/Santiago',
+      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+    });
+
+    let enviados = 0;
+    for (const r of candidatas) {
+      const { count } = await prisma.reserva.updateMany({
+        where: { id: r.id, recordatorioPendienteEnviado: false },
+        data: { recordatorioPendienteEnviado: true },
+      });
+      if (count === 0) continue;
+
+      let destinatarios = [];
+      if (r.sala.encargadoId) {
+        destinatarios = [r.sala.encargadoId];
+      } else {
+        const admins = await prisma.usuario.findMany({
+          where: { colegioId: req_colegioId_de(r), roles: { some: { rol: { nombre: 'administrador' } } } },
+          select: { id: true },
+        });
+        destinatarios = admins.map((a) => a.id);
+      }
+
+      const mensaje = `Sigue pendiente: ${r.usuario?.nombre || 'un docente'} solicitó ${r.sala.nombre} el ${fmtFechaHora.format(r.fechaInicio)} y aún no tiene respuesta (pedida el ${fmtFechaHora.format(r.creadoEn)}).`;
+
+      for (const destinatarioId of destinatarios) {
+        await crearNotificacion({ reservaId: r.id, destinatarioId, canal: 'push', mensaje });
+        await crearNotificacion({ reservaId: r.id, destinatarioId, canal: 'email', mensaje });
+      }
+      enviados++;
+    }
+
+    res.json({ candidatas: candidatas.length, enviados });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
 
 // GET /reservas/auditoria?accion=... [solo administrador]
