@@ -603,7 +603,7 @@ router.get('/recordatorios-pendientes/procesar', async (req, res) => {
         destinatarios = [r.sala.encargadoId];
       } else {
         const admins = await prisma.usuario.findMany({
-          where: { colegioId: req_colegioId_de(r), roles: { some: { rol: { nombre: 'administrador' } } } },
+          where: { colegioId: r.sala.colegioId, roles: { some: { rol: { nombre: 'administrador' } } } },
           select: { id: true },
         });
         destinatarios = admins.map((a) => a.id);
