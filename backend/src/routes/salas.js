@@ -237,4 +237,94 @@ router.get('/:id/estado-publico', async (req, res) => {
   });
 });
 
+// POST /salas/:id/incidencias -> cualquier usuario reporta un problema de equipamiento.
+// body: { descripcion }
+router.post('/:id/incidencias', requireAuth, async (req, res) => {
+  const { descripcion } = req.body;
+  if (!descripcion || !descripcion.trim()) {
+    return res.status(400).json({ error: 'Describe el problema antes de enviarlo.' });
+  }
+  const sala = await prisma.sala.findFirst({ where: { id: req.params.id, colegioId: req.user.colegioId } });
+  if (!sala) return res.status(404).json({ error: 'Sala no encontrada.' });
+
+  const incidencia = await prisma.incidencia.create({
+    data: {
+      colegioId: req.user.colegioId,
+      salaId: sala.id,
+      salaNombre: sala.nombre,
+      reportadoPorId: req.user.id,
+      reportadoPorNombre: req.user.nombre,
+      descripcion: descripcion.trim(),
+    },
+  });
+
+  // Avisa al encargado de la sala, o a los administradores si no tiene encargado.
+  let destinatarios = [];
+  if (sala.encargadoId) {
+    destinatarios = [sala.encargadoId];
+  } else {
+    const admins = await prisma.usuario.findMany({
+      where: { colegioId: req.user.colegioId, roles: { some: { rol: { nombre: 'administrador' } } } },
+      select: { id: true },
+    });
+    destinatarios = admins.map((a) => a.id);
+  }
+
+  const { enviarPush } = require('../lib/push');
+  const { sendEmail } = require('../providers/emailProvider');
+  const mensaje = `${req.user.nombre} reportó un problema en ${sala.nombre}: ${incidencia.descripcion}`;
+
+  for (const destinatarioId of destinatarios) {
+    try {
+      await enviarPush(destinatarioId, { title: 'ReservaMe — Problema reportado', body: mensaje });
+    } catch (err) {
+      console.error('[incidencias] Error enviando push:', err);
+    }
+    try {
+      const u = await prisma.usuario.findUnique({ where: { id: destinatarioId } });
+      if (u) await sendEmail({ to: u.emailInstitucional, subject: 'ReservaMe — problema reportado en una sala', body: mensaje });
+    } catch (err) {
+      console.error('[incidencias] Error enviando email:', err);
+    }
+  }
+
+  res.status(201).json({ incidencia });
+});
+
+// GET /salas/:id/incidencias?resuelta=false -> lista de incidencias de una sala
+// (para el encargado de esa sala o el administrador).
+router.get('/:id/incidencias', requireAuth, async (req, res) => {
+  const sala = await prisma.sala.findFirst({ where: { id: req.params.id, colegioId: req.user.colegioId } });
+  if (!sala) return res.status(404).json({ error: 'Sala no encontrada.' });
+
+  const esAdmin = req.user.roles.includes('administrador');
+  const esEncargado = sala.encargadoId === req.user.id;
+  if (!esAdmin && !esEncargado) return res.status(403).json({ error: 'No tienes permiso para ver las incidencias de esta sala.' });
+
+  const where = { salaId: sala.id };
+  if (req.query.resuelta !== undefined) where.resuelta = req.query.resuelta === 'true';
+
+  const incidencias = await prisma.incidencia.findMany({ where, orderBy: { creadoEn: 'desc' } });
+  res.json({ incidencias });
+});
+
+// PATCH /salas/incidencias/:id/resolver -> marca una incidencia como resuelta.
+router.patch('/incidencias/:id/resolver', requireAuth, async (req, res) => {
+  const incidencia = await prisma.incidencia.findUnique({ where: { id: req.params.id } });
+  if (!incidencia) return res.status(404).json({ error: 'Incidencia no encontrada.' });
+
+  const sala = await prisma.sala.findFirst({ where: { id: incidencia.salaId, colegioId: req.user.colegioId } });
+  if (!sala) return res.status(404).json({ error: 'Sala no encontrada.' });
+
+  const esAdmin = req.user.roles.includes('administrador');
+  const esEncargado = sala.encargadoId === req.user.id;
+  if (!esAdmin && !esEncargado) return res.status(403).json({ error: 'No tienes permiso para resolver esta incidencia.' });
+
+  const actualizada = await prisma.incidencia.update({
+    where: { id: incidencia.id },
+    data: { resuelta: true, resueltoPorId: req.user.id, resueltoEn: new Date() },
+  });
+  res.json({ incidencia: actualizada });
+});
+
 module.exports = router;
