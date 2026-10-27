@@ -68,6 +68,9 @@ export default function Reservar() {
   const [equipoState, setEquipoState] = useState({});
   const [enviando, setEnviando] = useState(false);
   const [resultado, setResultado] = useState(null);
+  const [reportandoProblema, setReportandoProblema] = useState(false);
+  const [descripcionProblema, setDescripcionProblema] = useState('');
+  const [enviandoProblema, setEnviandoProblema] = useState(false);
 
   useEffect(() => { if (fechaQuery) setFecha(fechaQuery); }, [fechaQuery]);
 
@@ -191,6 +194,23 @@ export default function Reservar() {
     }
   }
 
+    async function enviarReporteProblema() {
+    if (!descripcionProblema.trim()) {
+      showToast('Describe el problema antes de enviarlo.', 'error');
+      return;
+    }
+    setEnviandoProblema(true);
+    try {
+      await api.post(`/salas/${salaId}/incidencias`, { descripcion: descripcionProblema.trim() });
+      showToast('Problema reportado. El encargado fue notificado.', 'success');
+      setReportandoProblema(false);
+      setDescripcionProblema('');
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setEnviandoProblema(false);
+    }
+  }
   function volver() {
     if (resultado) { router.push('/mis-reservas'); return; }
     if (paso === 1) { router.back(); return; }
@@ -236,12 +256,36 @@ export default function Reservar() {
     <div>
       <button className="btn btn-ghost btn-sm" style={{ marginBottom: 12 }} onClick={volver}>← Volver</button>
 
-      {paso < 4 && (
+            {paso < 4 && (
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14 }}>
           <StickerIcon tono="purple" glyph={GLYPH.calendario} size={52} />
-          <div>
+          <div style={{ flex: 1 }}>
             <h1 className="page-title" style={{ margin: 0 }}>{sala.nombre}</h1>
             <p className="page-sub" style={{ margin: '2px 0 0' }}>Capacidad {sala.capacidad ?? '—'} personas</p>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={() => setReportandoProblema(true)}>⚠️ Reportar</button>
+        </div>
+      )}
+
+      {reportandoProblema && (
+        <div className="overlay center">
+          <div className="modal">
+            <div className="icon-circle" style={{ background: 'var(--coral-light)' }}>⚠️</div>
+            <h2>Reportar un problema</h2>
+            <p className="hint">Describe qué está fallando en {sala.nombre}. Se avisará al encargado.</p>
+            <textarea
+              rows={3}
+              placeholder="Ej: el proyector no enciende"
+              value={descripcionProblema}
+              onChange={(e) => setDescripcionProblema(e.target.value)}
+              style={{ width: '100%', marginBottom: 12 }}
+            />
+            <div className="modal-actions">
+              <button className="btn btn-coral-solid btn-block" disabled={enviandoProblema} onClick={enviarReporteProblema}>
+                {enviandoProblema ? 'Enviando…' : 'Enviar reporte'}
+              </button>
+              <button className="btn btn-ghost btn-block" onClick={() => { setReportandoProblema(false); setDescripcionProblema(''); }}>Cancelar</button>
+            </div>
           </div>
         </div>
       )}
