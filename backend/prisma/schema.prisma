@@ -99,6 +99,7 @@ model Reserva {
   motivoRechazo          String?  @map("motivo_rechazo")
   equipamientoSolicitado Json     @default("[]") @map("equipamiento_solicitado")
   recordatorioEnviado    Boolean  @default(false) @map("recordatorio_enviado")
+  recordatorioPendienteEnviado Boolean @default(false) @map("recordatorio_pendiente_enviado")
   creadoEn               DateTime @default(now()) @map("creado_en")
 
   notificaciones Notificacion[]
