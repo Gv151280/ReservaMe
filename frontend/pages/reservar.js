@@ -28,7 +28,7 @@ function combinarFechaMinutos(fechaISO, minutos) {
   const dt = new Date(y, m - 1, d, 0, minutos, 0, 0);
   return dt.toISOString();
 }
-const SEMANAS_ADICIONALES = 2; // debe coincidir con SEMANAS_ADICIONALES_RECURRENTE del backend
+const SEMANAS_ADICIONALES = 1; // debe coincidir con SEMANAS_ADICIONALES_RECURRENTE del backend
 function iconoEquipo(nombre) {
   const n = (nombre || '').toLowerCase();
   if (n.includes('notebook')) return '💻';
