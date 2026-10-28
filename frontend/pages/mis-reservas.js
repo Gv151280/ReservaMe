@@ -11,6 +11,7 @@ export default function MisReservas() {
   const [esperas, setEsperas] = useState([]);
   const [tab, setTab] = useState('proximas');
   const [confirmarCancelarId, setConfirmarCancelarId] = useState(null);
+  const [confirmarCancelarSerieId, setConfirmarCancelarSerieId] = useState(null);
 
   function cargar() {
     api.get('/reservas/mias').then((d) => setReservas(d.reservas)).catch((e) => showToast(e.message, 'error'));
@@ -52,6 +53,16 @@ export default function MisReservas() {
     }
   }
 
+  async function cancelarSerie(serieId) {
+    try {
+      const data = await api.del(`/reservas/serie/${serieId}/futuras`);
+      showToast(`Se cancelaron ${data.canceladas} reserva(s) de la serie.`, 'info');
+      setConfirmarCancelarSerieId(null);
+      cargar();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
   const emptyMsg = {
     proximas: 'No tienes reservas próximas.',
     pendientes: 'No tienes solicitudes pendientes.',
@@ -111,6 +122,11 @@ export default function MisReservas() {
                       Cancelar
                     </button>
                   )}
+                  {puedeCancelar && r.serieId && (
+                    <button className="btn btn-coral btn-sm" onClick={() => setConfirmarCancelarSerieId(r.serieId)}>
+                      Cancelar esta serie
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -134,6 +150,23 @@ export default function MisReservas() {
         </div>
       )}
 
+      {confirmarCancelarSerieId && (
+        <div className="overlay center">
+          <div className="modal">
+            <div className="icon-circle" style={{ background: 'var(--coral-light)' }}>⚠️</div>
+            <h2>¿Cancelar toda la serie?</h2>
+            <p>
+              Se cancelarán <b>todas las reservas futuras</b> de esta serie recurrente (las que ya pasaron no se tocan).
+              Cada docente afectado por un horario liberado será notificado si esperaba esa sala.
+              Esta acción no se puede deshacer.
+            </p>
+            <div className="modal-actions">
+              <button className="btn btn-coral-solid btn-block" onClick={() => cancelarSerie(confirmarCancelarSerieId)}>Sí, cancelar la serie</button>
+              <button className="btn btn-ghost btn-block" onClick={() => setConfirmarCancelarSerieId(null)}>Volver</button>
+            </div>
+          </div>
+        </div>
+      )}
       {confirmarCancelarId && (
         <div className="overlay center">
           <div className="modal">
