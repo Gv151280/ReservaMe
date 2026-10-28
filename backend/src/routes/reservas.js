@@ -97,7 +97,7 @@ function filtrarEquipamiento(itemsSala, solicitado) {
 
 // Cuántas semanas ADICIONALES se intentan crear al activar "repetir" (solo clase).
 // Total de reservas por serie = SEMANAS_ADICIONALES_RECURRENTE + 1.
-const SEMANAS_ADICIONALES_RECURRENTE = 2;
+const SEMANAS_ADICIONALES_RECURRENTE = 1;
 const OCURRENCIAS_RECURRENTE = SEMANAS_ADICIONALES_RECURRENTE + 1;
 
 // Valida y crea UNA ocurrencia (se reutiliza tanto para reserva normal como recurrente).
