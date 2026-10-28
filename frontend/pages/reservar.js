@@ -365,12 +365,12 @@ export default function Reservar() {
             {tipoUso === 'clase' && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
                 <div className={`switch ${repetir ? 'on' : ''}`} onClick={() => setRepetir((r) => !r)} />
-                <span style={{ fontSize: 13 }}>Repetir las próximas {SEMANAS_ADICIONALES} semanas</span>
+                <span style={{ fontSize: 13 }}>Repetir la próxima semana</span>
               </div>
             )}
             {tipoUso === 'clase' && repetir && (
               <p className="hint">
-                Se intentará reservar el mismo día y horario esta semana y las {SEMANAS_ADICIONALES} siguientes (máximo {SEMANAS_ADICIONALES + 1} reservas). Si alguna semana ya está ocupada, esa semana se omite y las demás se crean igual.
+              Se intentará reservar el mismo día y horario esta semana y la siguiente (máximo 2 reservas). Si la semana siguiente ya está ocupada, se omite y la de esta semana se crea igual.
               </p>
             )}
           </div>
