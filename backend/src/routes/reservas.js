@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const prisma = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
@@ -94,13 +95,43 @@ function filtrarEquipamiento(itemsSala, solicitado) {
   return resultado;
 }
 
+// Cuántas semanas ADICIONALES se intentan crear al activar "repetir" (solo clase).
+// Total de reservas por serie = SEMANAS_ADICIONALES_RECURRENTE + 1.
+const SEMANAS_ADICIONALES_RECURRENTE = 2;
+const OCURRENCIAS_RECURRENTE = SEMANAS_ADICIONALES_RECURRENTE + 1;
+
+// Valida y crea UNA ocurrencia (se reutiliza tanto para reserva normal como recurrente).
+async function crearOcurrenciaReserva({ colegioId, usuarioId, salaId, tipoUso, inicio, fin, equipamiento, serieId }) {
+  await validarTipoUsoYHorario(colegioId, tipoUso, inicio, fin);
+  await validarSinSolape(salaId, inicio, fin);
+  const bloqueo = await bloqueoEnRango(salaId, inicio, fin);
+  if (bloqueo) throw errorHttp(409, `La sala está bloqueada en ese horario: ${bloqueo.motivo}.`);
+
+  const estado = tipoUso === 'clase' ? 'confirmada' : 'pendiente';
+  return prisma.reserva.create({
+    data: {
+      salaId,
+      usuarioId,
+      tipoUso,
+      fechaInicio: inicio,
+      fechaFin: fin,
+      estado,
+      equipamientoSolicitado: equipamiento,
+      serieId: serieId || null,
+    },
+  });
+}
+
 // POST /reservas -> crea la reserva validando TODAS las reglas de negocio del backend.
-// body: { salaId, tipoUso, fechaInicio, fechaFin, equipamientoSolicitado?: [{nombre, cantidad?}] }
+// body: { salaId, tipoUso, fechaInicio, fechaFin, equipamientoSolicitado?, repetir? }
 // El estado (confirmada/pendiente) depende SOLO de tipoUso: "clase" siempre es
 // automática, "reunion_otro" siempre requiere aprobación — sin importar la sala.
+// repetir=true SOLO aplica a "clase": crea el mismo día/hora, OCURRENCIAS_RECURRENTE
+// veces en total (esta semana + SEMANAS_ADICIONALES_RECURRENTE siguientes). Si una
+// semana tiene conflicto, se omite esa sola y se crean las demás igual.
 router.post('/', requireAuth, async (req, res) => {
   try {
-    const { salaId, tipoUso, fechaInicio, fechaFin, equipamientoSolicitado } = req.body;
+    const { salaId, tipoUso, fechaInicio, fechaFin, equipamientoSolicitado, repetir } = req.body;
     if (!salaId || !tipoUso || !fechaInicio || !fechaFin) {
       throw errorHttp(400, 'Faltan campos: salaId, tipoUso, fechaInicio, fechaFin.');
     }
@@ -113,35 +144,52 @@ router.post('/', requireAuth, async (req, res) => {
 
     const inicio = new Date(fechaInicio);
     const fin = new Date(fechaFin);
-
     validarAnticipacion(inicio);
-    await validarTipoUsoYHorario(req.user.colegioId, tipoUso, inicio, fin);
-    await validarSinSolape(salaId, inicio, fin);
-    const bloqueo = await bloqueoEnRango(salaId, inicio, fin);
-    if (bloqueo) throw errorHttp(409, `La sala está bloqueada en ese horario: ${bloqueo.motivo}.`);
 
     const equipamiento = filtrarEquipamiento(sala.itemsEquipamiento, equipamientoSolicitado);
-    const estado = tipoUso === 'clase' ? 'confirmada' : 'pendiente';
+    const esRecurrente = tipoUso === 'clase' && Boolean(repetir);
 
-    const reserva = await prisma.reserva.create({
-      data: {
-        salaId,
-        usuarioId: req.user.id,
-        tipoUso,
-        fechaInicio: inicio,
-        fechaFin: fin,
-        estado,
-        equipamientoSolicitado: equipamiento,
-      },
-    });
-
-    if (estado === 'confirmada') {
-      await notificarReservaConfirmada({ reserva, sala, usuarioId: req.user.id });
-    } else {
-      await notificarReservaPendiente({ reserva, sala, solicitante: req.user });
+    if (!esRecurrente) {
+      const reserva = await crearOcurrenciaReserva({
+        colegioId: req.user.colegioId, usuarioId: req.user.id, salaId, tipoUso, inicio, fin, equipamiento,
+      });
+      if (reserva.estado === 'confirmada') {
+        await notificarReservaConfirmada({ reserva, sala, usuarioId: req.user.id });
+      } else {
+        await notificarReservaPendiente({ reserva, sala, solicitante: req.user });
+      }
+      return res.status(201).json({ reserva });
     }
 
-    res.status(201).json({ reserva });
+    // Camino recurrente.
+    const serieId = crypto.randomUUID();
+    const creadas = [];
+    const omitidas = [];
+    const fmtFechaCorta = new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit' });
+
+    for (let i = 0; i < OCURRENCIAS_RECURRENTE; i++) {
+      const inicioSemana = new Date(inicio.getTime() + i * 7 * 24 * 60 * 60 * 1000);
+      const finSemana = new Date(fin.getTime() + i * 7 * 24 * 60 * 60 * 1000);
+      try {
+        const reserva = await crearOcurrenciaReserva({
+          colegioId: req.user.colegioId, usuarioId: req.user.id, salaId, tipoUso,
+          inicio: inicioSemana, fin: finSemana, equipamiento, serieId,
+        });
+        creadas.push(reserva);
+      } catch (err) {
+        omitidas.push({ fecha: fmtFechaCorta.format(inicioSemana), motivo: err.message });
+      }
+    }
+
+    if (creadas.length === 0) {
+      throw errorHttp(409, 'No se pudo crear ninguna reserva: todas las semanas tienen conflicto.');
+    }
+
+    for (const reserva of creadas) {
+      await notificarReservaConfirmada({ reserva, sala, usuarioId: req.user.id });
+    }
+
+    res.status(201).json({ reserva: creadas[0], serieId, creadas: creadas.length, omitidas });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -619,6 +667,35 @@ router.get('/recordatorios-pendientes/procesar', async (req, res) => {
     }
 
     res.json({ candidatas: candidatas.length, enviados });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// DELETE /reservas/serie/:serieId/futuras -> cancela TODAS las ocurrencias futuras
+// (pendiente o confirmada) de una serie recurrente, solo las del usuario que pide.
+// Las que ya pasaron no se tocan.
+router.delete('/serie/:serieId/futuras', requireAuth, async (req, res) => {
+  try {
+    const ahora = new Date();
+    const ocurrencias = await prisma.reserva.findMany({
+      where: {
+        serieId: req.params.serieId,
+        usuarioId: req.user.id,
+        estado: { in: ['pendiente', 'confirmada'] },
+        fechaInicio: { gt: ahora },
+      },
+      include: { sala: true },
+    });
+
+    if (ocurrencias.length === 0) return res.json({ canceladas: 0 });
+
+    for (const r of ocurrencias) {
+      await prisma.reserva.update({ where: { id: r.id }, data: { estado: 'cancelada' } });
+      await avisarListaEspera({ salaId: r.salaId, salaNombre: r.sala.nombre, fechaInicio: r.fechaInicio, fechaFin: r.fechaFin });
+    }
+
+    res.json({ canceladas: ocurrencias.length });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
