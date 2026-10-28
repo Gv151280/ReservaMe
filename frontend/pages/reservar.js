@@ -28,6 +28,7 @@ function combinarFechaMinutos(fechaISO, minutos) {
   const dt = new Date(y, m - 1, d, 0, minutos, 0, 0);
   return dt.toISOString();
 }
+const SEMANAS_ADICIONALES = 2; // debe coincidir con SEMANAS_ADICIONALES_RECURRENTE del backend
 function iconoEquipo(nombre) {
   const n = (nombre || '').toLowerCase();
   if (n.includes('notebook')) return '💻';
@@ -68,6 +69,8 @@ export default function Reservar() {
   const [equipoState, setEquipoState] = useState({});
   const [enviando, setEnviando] = useState(false);
   const [resultado, setResultado] = useState(null);
+  const [repetir, setRepetir] = useState(false);
+  const [previaSemanas, setPreviaSemanas] = useState(null);
   const [reportandoProblema, setReportandoProblema] = useState(false);
   const [descripcionProblema, setDescripcionProblema] = useState('');
   const [enviandoProblema, setEnviandoProblema] = useState(false);
@@ -92,6 +95,39 @@ export default function Reservar() {
     api.get(`/salas/${salaId}/disponibilidad?fecha=${fecha}`).then(setDisponibilidad);
     setBloqueInicio(null);
   }, [salaId, fecha]);
+  
+  // Vista previa de las semanas siguientes, ANTES de confirmar, cuando "repetir" está activo.
+  useEffect(() => {
+    if (!repetir || tipoUso !== 'clase' || bloqueInicio === null || !salaId) {
+      setPreviaSemanas(null);
+      return;
+    }
+    const bloqueBase = bloquesDia[bloqueInicio];
+    if (!bloqueBase) return;
+
+    let cancelado = false;
+    setPreviaSemanas([]);
+    (async () => {
+      const resultados = [];
+      for (let i = 1; i <= SEMANAS_ADICIONALES; i++) {
+        const fechaSemana = addDiasISO(fecha, i * 7);
+        try {
+          const d = await api.get(`/salas/${salaId}/disponibilidad?fecha=${fechaSemana}`);
+          const match = (d.bloques || []).find((b) => b.start === bloqueBase.start);
+          resultados.push({
+            fecha: fechaSemana,
+            disponible: d.abierto && match && !match.ocupado && !match.pasado,
+            motivo: !d.abierto ? 'Sin jornada ese día' : !match ? 'Esa hora no existe ese día' : match.ocupado ? 'Hora ya reservada por otro profesor' : null,
+          });
+        } catch {
+          resultados.push({ fecha: fechaSemana, disponible: false, motivo: 'No se pudo verificar' });
+        }
+      }
+      if (!cancelado) setPreviaSemanas(resultados);
+    })();
+
+    return () => { cancelado = true; };
+  }, [repetir, tipoUso, bloqueInicio, salaId, fecha, bloquesDia]);
 
   const bloquesDia = disponibilidad?.bloques || [];
 
@@ -199,16 +235,25 @@ export default function Reservar() {
       showToast('Describe el problema antes de enviarlo.', 'error');
       return;
     }
-    setEnviandoProblema(true);
+    setEnviando(true);
     try {
-      await api.post(`/salas/${salaId}/incidencias`, { descripcion: descripcionProblema.trim() });
-      showToast('Problema reportado. El encargado fue notificado.', 'success');
-      setReportandoProblema(false);
-      setDescripcionProblema('');
+      const data = await api.post('/reservas', {
+        salaId,
+        tipoUso,
+        fechaInicio: fechaInicioISO,
+        fechaFin: fechaFinISO,
+        equipamientoSolicitado,
+        repetir: tipoUso === 'clase' ? repetir : false,
+      });
+      if (data.omitidas && data.omitidas.length > 0) {
+        const detalle = data.omitidas.map((o) => `${o.fecha}: ${o.motivo}`).join(' · ');
+        showToast(`Se crearon ${data.creadas} de ${data.creadas + data.omitidas.length} reservas. Omitidas: ${detalle}`, 'info');
+      }
+      setResultado(data.reserva);
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
-      setEnviandoProblema(false);
+      setEnviando(false);
     }
   }
   function volver() {
@@ -314,8 +359,19 @@ export default function Reservar() {
               <button className={tipoUso === 'clase' ? 'active' : ''} onClick={() => setTipoUso('clase')}>📘 Clase</button>
               <button className={tipoUso === 'reunion_otro' ? 'active' : ''} onClick={() => setTipoUso('reunion_otro')}>🤝 Reunión / otro</button>
             </div>
-            {tipoUso === 'reunion_otro' && (
+              {tipoUso === 'reunion_otro' && (
               <p className="hint">El horario de reuniones debe ser confirmado por el encargado de la sala.</p>
+            )}
+            {tipoUso === 'clase' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                <div className={`switch ${repetir ? 'on' : ''}`} onClick={() => setRepetir((r) => !r)} />
+                <span style={{ fontSize: 13 }}>Repetir las próximas {SEMANAS_ADICIONALES} semanas</span>
+              </div>
+            )}
+            {tipoUso === 'clase' && repetir && (
+              <p className="hint">
+                Se intentará reservar el mismo día y horario esta semana y las {SEMANAS_ADICIONALES} siguientes (máximo {SEMANAS_ADICIONALES + 1} reservas). Si alguna semana ya está ocupada, esa semana se omite y las demás se crean igual.
+              </p>
             )}
           </div>
 
@@ -355,6 +411,25 @@ export default function Reservar() {
               ))}
             </div>
           )}
+          {repetir && previaSemanas && previaSemanas.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div className="section-label">Vista previa de las semanas siguientes</div>
+              {previaSemanas.map((s, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', padding: '6px 10px', marginBottom: 6,
+                    borderRadius: 8, fontSize: 13,
+                    background: s.disponible ? '#e3f6e8' : 'var(--coral-light)',
+                  }}
+                >
+                  <span>Semana {i + 2} ({fmtFechaBonita(s.fecha)})</span>
+                  <span style={{ fontWeight: 600 }}>{s.disponible ? 'Disponible' : s.motivo}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <button className="btn btn-primary btn-block" style={{ marginTop: 16 }} onClick={continuarPaso2}>Confirmar Hora{duracion === 90 ? 's' : ''}</button>
         </>
       )}
