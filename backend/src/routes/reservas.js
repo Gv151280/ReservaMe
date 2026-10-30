@@ -701,6 +701,93 @@ router.delete('/serie/:serieId/futuras', requireAuth, async (req, res) => {
   }
 });
 
+// GET /reservas/mi-semana -> próximos 7 días de reservas y bloqueos, agrupados por
+// día, SOLO de las salas que el usuario gestiona (encargado: las suyas; admin: todas).
+router.get('/mi-semana', requireAuth, async (req, res) => {
+  try {
+    const esAdmin = req.user.roles.includes('administrador');
+    const salas = await prisma.sala.findMany({
+      where: esAdmin
+        ? { colegioId: req.user.colegioId, activa: true }
+        : { colegioId: req.user.colegioId, activa: true, encargadoId: req.user.id },
+      orderBy: { nombre: 'asc' },
+    });
+    if (salas.length === 0) return res.json({ dias: [] });
+
+    const salaIds = salas.map((s) => s.id);
+    const salaPorId = new Map(salas.map((s) => [s.id, s.nombre]));
+
+    const ahora = new Date();
+    const inicioHoy = new Date(ahora);
+    inicioHoy.setHours(0, 0, 0, 0);
+    const finRango = new Date(inicioHoy.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const reservas = await prisma.reserva.findMany({
+      where: {
+        salaId: { in: salaIds },
+        estado: { in: ['pendiente', 'confirmada'] },
+        fechaInicio: { lt: finRango },
+        fechaFin: { gt: ahora },
+      },
+      include: { usuario: { select: { nombre: true } } },
+    });
+
+    const bloqueos = await prisma.bloqueo.findMany({
+      where: {
+        salaId: { in: salaIds },
+        activo: true,
+        fechaInicio: { lt: finRango },
+        fechaFin: { gt: ahora },
+      },
+    });
+
+    const fmtDiaClave = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' });
+    const fmtDiaLegible = new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', weekday: 'long', day: 'numeric', month: 'long' });
+    const fmtHora = new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', hour: '2-digit', minute: '2-digit', hour12: false });
+
+    const items = [
+      ...reservas.map((r) => ({
+        salaNombre: salaPorId.get(r.salaId),
+        tipo: 'reserva',
+        estado: r.estado,
+        inicio: r.fechaInicio,
+        fin: r.fechaFin,
+        titulo: `${r.tipoUso === 'clase' ? 'Clase' : 'Reunión'} · ${r.usuario?.nombre || ''}`,
+      })),
+      ...bloqueos.map((b) => ({
+        salaNombre: salaPorId.get(b.salaId),
+        tipo: 'bloqueo',
+        estado: 'bloqueado',
+        inicio: b.fechaInicio,
+        fin: b.fechaFin,
+        titulo: `Bloqueado: ${b.motivo}`,
+      })),
+    ].sort((a, b) => new Date(a.inicio) - new Date(b.inicio));
+
+    const porDia = new Map();
+    for (const it of items) {
+      const clave = fmtDiaClave.format(it.inicio);
+      if (!porDia.has(clave)) porDia.set(clave, []);
+      porDia.get(clave).push({
+        ...it,
+        horaInicio: fmtHora.format(it.inicio),
+        horaFin: fmtHora.format(it.fin),
+      });
+    }
+
+    const dias = [...porDia.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([fecha, items]) => {
+        const texto = fmtDiaLegible.format(new Date(`${fecha}T12:00:00`));
+        return { fecha, fechaLegible: texto.charAt(0).toUpperCase() + texto.slice(1), items };
+      });
+
+    res.json({ dias });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
 
 // GET /reservas/auditoria?accion=... [solo administrador]
