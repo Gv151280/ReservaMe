@@ -102,7 +102,8 @@ export default function BottomNav() {
   if (tieneRol(user, 'encargado_sala') || tieneRol(user, 'administrador')) {
     items.push({ href: '/pendientes', label: 'Pendientes', icon: 'check', count: pendientesCount });
   }
-  if (tieneRol(user, 'encargado_sala')) {
+    if (tieneRol(user, 'encargado_sala')) {
+    items.push({ href: '/mi-semana', label: 'Mi semana', icon: 'cal' });
     items.push({ href: '/equipos', label: 'Equipos', icon: 'tools' });
   }
   if (tieneRol(user, 'directivo') || tieneRol(user, 'administrador')) {
