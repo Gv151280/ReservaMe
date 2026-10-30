@@ -13,6 +13,9 @@ export default function Equipos() {
   const [editandoId, setEditandoId] = useState(null);
   const [borrador, setBorrador] = useState({});
   const [incidenciasPorSala, setIncidenciasPorSala] = useState({});
+  const [historialAbiertoId, setHistorialAbiertoId] = useState(null);
+  const [historialPorSala, setHistorialPorSala] = useState({});
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
 
   function cargar() {
     api.get('/salas').then((d) => {
@@ -40,6 +43,25 @@ export default function Equipos() {
     }
   }
 
+  async function toggleHistorial(salaId) {
+    if (historialAbiertoId === salaId) {
+      setHistorialAbiertoId(null);
+      return;
+    }
+    setHistorialAbiertoId(salaId);
+    if (!historialPorSala[salaId]) {
+      setCargandoHistorial(true);
+      try {
+        const d = await api.get(`/salas/${salaId}/incidencias`);
+        setHistorialPorSala((prev) => ({ ...prev, [salaId]: d.incidencias }));
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        setCargandoHistorial(false);
+      }
+    }
+  }
+  
   const misSalas = (salas || []).filter((s) => s.encargado?.id === user?.id);
 
   function abrirEdicion(sala) {
@@ -104,11 +126,13 @@ export default function Equipos() {
               <div className="admin-card-top">
                 <StickerIcon tono="purple" glyph={GLYPH.calendario} size={40} />
                 <h3 style={{ flex: 1, marginLeft: 10 }}>{sala.nombre}</h3>
+                <button className="btn btn-ghost btn-sm" onClick={() => toggleHistorial(sala.id)}>
+                  {historialAbiertoId === sala.id ? 'Ocultar historial' : 'Ver historial'}
+                </button>
                 <button className="btn btn-secondary btn-sm" onClick={() => (editandoId === sala.id ? setEditandoId(null) : abrirEdicion(sala))}>
                   {editandoId === sala.id ? 'Cerrar' : 'Editar'}
                 </button>
-              </div>
-              <p className="sala-meta">{sala.equipamiento || 'Sin equipamiento descrito'}</p>
+              </div>              <p className="sala-meta">{sala.equipamiento || 'Sin equipamiento descrito'}</p>
 
               {incidencias.length > 0 && (
                 <div style={{ marginTop: 10 }}>
@@ -130,6 +154,35 @@ export default function Equipos() {
                       <button className="btn btn-ghost btn-sm" onClick={() => resolverIncidencia(sala.id, inc.id)}>Resuelto</button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {historialAbiertoId === sala.id && (
+                <div style={{ marginTop: 10, borderTop: '1px solid #f0eef3', paddingTop: 10 }}>
+                  <div className="section-label">Historial de equipamiento</div>
+                  {cargandoHistorial && !historialPorSala[sala.id] ? (
+                    <p className="sala-meta">Cargando…</p>
+                  ) : (historialPorSala[sala.id] || []).length === 0 ? (
+                    <p className="sala-meta">Sin incidencias registradas en esta sala.</p>
+                  ) : (
+                    historialPorSala[sala.id].map((inc) => (
+                      <div
+                        key={inc.id}
+                        style={{
+                          padding: '8px 10px', marginTop: 6, borderRadius: 8,
+                          background: inc.resuelta ? '#f4fbf5' : 'var(--coral-light)',
+                        }}
+                      >
+                        <div style={{ fontSize: 13 }}>{inc.descripcion}</div>
+                        <div className="sala-meta" style={{ margin: 0 }}>
+                          Reportado por {inc.reportadoPorNombre} · {new Date(inc.creadoEn).toLocaleDateString('es-CL')}
+                        </div>
+                        <div className="sala-meta" style={{ margin: 0, fontWeight: 600, color: inc.resuelta ? '#1a7a3c' : 'var(--coral-dark)' }}>
+                          {inc.resuelta ? `Resuelta el ${new Date(inc.resueltoEn).toLocaleDateString('es-CL')}` : 'Sin resolver'}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
 
