@@ -74,10 +74,15 @@ export default function Login() {
         </p>
       )}
 
-      <p className="hint" style={{ marginTop: 22 }}>
+            <p className="hint" style={{ marginTop: 22 }}>
         Login provisional (Plan B del doc técnico). Cuando el sostenedor apruebe el acceso a Microsoft Entra ID,
         este formulario se reemplaza por &quot;Iniciar sesión con Microsoft&quot; sin perder tus reservas.
+      </p>
+
+      <p className="hint" style={{ marginTop: 14 }}>
+        <a href="/ayuda" style={{ color: 'var(--purple-dark)', fontWeight: 600 }}>¿No te llega el correo? Centro de ayuda</a>
       </p>
     </div>
   );
 }
+
