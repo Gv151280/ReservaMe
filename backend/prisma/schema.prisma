@@ -257,3 +257,13 @@ model Incidencia {
   @@index([salaId, resuelta])
   @@map("incidencia")
 }
+
+// Registro de la última vez que corrió cada tarea programada (cron), para que el
+// panel de salud del administrador pueda detectar si algo dejó de ejecutarse.
+model EstadoTarea {
+  clave        String   @id // ej: "recordatorios-clase", "recordatorios-pendientes", "respaldo-semanal"
+  ultimaEjecucion DateTime @map("ultima_ejecucion")
+  ultimoResultado Json     @default("{}") @map("ultimo_resultado")
+
+  @@map("estado_tarea")
+}
