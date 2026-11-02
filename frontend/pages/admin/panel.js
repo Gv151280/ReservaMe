@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 const SECCIONES = [
+  { href: '/salud', titulo: 'Salud del sistema', desc: 'Estado de las tareas automáticas y enlaces a Render, Vercel, Neon, Sentry.', icon: '🩺' },
   { href: '/admin/colegio', titulo: 'Colegio', desc: 'Nombre y logo del establecimiento.', icon: '🏫' },
   { href: '/admin/horario', titulo: 'Horario', desc: 'Horas de clase y horario institucional por día.', icon: '🕐' },
   { href: '/admin/salas', titulo: 'Salas', desc: 'Salas disponibles, encargados y equipamiento.', icon: '🚪' },
