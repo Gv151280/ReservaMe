@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useToast } from '../components/Toast';
 import { useSession, tieneRol } from '../lib/useSession';
+import ExportarCsv from '../components/ExportarCsv';
 
 const ACCIONES = {
   'reserva.aprobar': 'Aprobó una reserva',
@@ -63,7 +64,7 @@ export default function Auditoria() {
       <h1 className="page-title">Registro de auditoría</h1>
       <p className="page-sub">Acciones sensibles realizadas por directivos, encargados y administradores.</p>
 
-      <div style={{ margin: '12px 0' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', margin: '12px 0' }}>
         <label style={{ fontSize: 13 }}>
           Filtrar por acción
           <select value={accion} onChange={(e) => setAccion(e.target.value)} style={{ display: 'block', marginTop: 4 }}>
@@ -73,6 +74,7 @@ export default function Auditoria() {
             ))}
           </select>
         </label>
+        <ExportarCsv rutaExtra="/reservas/auditoria/exportar-csv" params={accion ? { accion } : {}} />
       </div>
 
       {registros === null ? (
