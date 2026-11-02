@@ -20,6 +20,7 @@ const {
 } = require('../lib/notificaciones');
 const { registrarAuditoria } = require('../lib/auditoria');
 const { avisarListaEspera } = require('../lib/listaEspera');
+const { registrarEjecucion } = require('../lib/estadoTarea');
 
 const router = express.Router();
 
@@ -415,12 +416,14 @@ router.get('/recordatorios/procesar', async (req, res) => {
       enviados++;
     }
 
+    await registrarEjecucion('recordatorios-clase', { candidatas: candidatas.length, enviados });
     res.json({ candidatas: candidatas.length, enviados });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
 });
 
+// GET /reservas/recordatorios-pendientes/procesar
 // GET /reservas/estadisticas?desde=ISO&hasta=ISO [solo administrador]
 // Agrega las reservas CONFIRMADAS del colegio: por sala, hora del día, día de la
 // semana y tipo de uso. Sirve para ver qué salas y horarios se usan más.
@@ -666,6 +669,7 @@ router.get('/recordatorios-pendientes/procesar', async (req, res) => {
       enviados++;
     }
 
+    await registrarEjecucion('recordatorios-pendientes', { candidatas: candidatas.length, enviados });
     res.json({ candidatas: candidatas.length, enviados });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -851,6 +855,18 @@ router.get('/auditoria/exportar-csv', requireAuth, requireRole('administrador'),
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="auditoria_${hoy}.csv"`);
     res.send(csv);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+// GET /reservas/salud [solo administrador]
+// Devuelve cuándo corrió cada tarea programada por última vez, para el panel
+// de salud del sistema. No llama a ningún servicio externo, solo lee la tabla
+// que los propios crons actualizan cada vez que se ejecutan.
+router.get('/salud', requireAuth, requireRole('administrador'), async (req, res) => {
+  try {
+    const tareas = await prisma.estadoTarea.findMany();
+    res.json({ tareas });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
