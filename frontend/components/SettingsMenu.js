@@ -77,6 +77,11 @@ export default function SettingsMenu() {
             </div>
           </div>
           <div className="settings-row">
+            <Link href="/ayuda" onClick={() => setOpen(false)} style={{ color: 'var(--purple-dark)', textDecoration: 'none' }}>
+              Centro de ayuda
+            </Link>
+          </div>
+          <div className="settings-row">
             <Link href="/privacidad" onClick={() => setOpen(false)} style={{ color: 'var(--purple-dark)', textDecoration: 'none' }}>
               Política de privacidad
             </Link>
