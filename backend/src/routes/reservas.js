@@ -788,6 +788,73 @@ router.get('/mi-semana', requireAuth, async (req, res) => {
   }
 });
 
+// GET /reservas/auditoria/exportar-csv?desde=ISO&hasta=ISO&accion=... [solo administrador]
+// Exporta el registro de auditoría del colegio a CSV, con los mismos filtros
+// opcionales de fecha y acción que ya usa la pantalla de Auditoría.
+router.get('/auditoria/exportar-csv', requireAuth, requireRole('administrador'), async (req, res) => {
+  try {
+    const { desde, hasta, accion } = req.query;
+    const where = { colegioId: req.user.colegioId };
+    if (accion) where.accion = String(accion);
+    if (desde || hasta) {
+      where.creadoEn = {};
+      if (desde) {
+        const d = new Date(desde);
+        if (isNaN(d)) throw errorHttp(400, 'Parámetro "desde" inválido.');
+        where.creadoEn.gte = d;
+      }
+      if (hasta) {
+        const h = new Date(hasta);
+        if (isNaN(h)) throw errorHttp(400, 'Parámetro "hasta" inválido.');
+        where.creadoEn.lte = h;
+      }
+    }
+
+    const registros = await prisma.auditLog.findMany({
+      where,
+      orderBy: { creadoEn: 'desc' },
+    });
+
+    const TZ = 'America/Santiago';
+    const fmtFechaHora = new Intl.DateTimeFormat('es-CL', {
+      timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+    });
+
+    const ACCION_LEGIBLE = {
+      'reserva.aprobar': 'Aprobó una reserva',
+      'reserva.rechazar': 'Rechazó una reserva',
+      'reserva.anular': 'Anuló una reserva',
+      'bloqueo.crear': 'Creó un bloqueo',
+      'bloqueo.revertir': 'Revirtió un bloqueo',
+    };
+
+    // Escapa una celda: envuelve en comillas y duplica las comillas internas.
+    const celda = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
+    const encabezado = ['Fecha y hora', 'Usuario', 'Acción', 'Entidad', 'Detalle'];
+
+    const filas = registros.map((r) => {
+      const detalle = r.detalle && typeof r.detalle === 'object' ? JSON.stringify(r.detalle) : String(r.detalle ?? '');
+      return [
+        fmtFechaHora.format(r.creadoEn),
+        r.usuarioNombre,
+        ACCION_LEGIBLE[r.accion] || r.accion,
+        r.entidad,
+        detalle,
+      ].map(celda).join(';');
+    });
+
+    // BOM UTF-8 para que Excel reconozca tildes y ñ.
+    const csv = '\uFEFF' + [encabezado.map(celda).join(';'), ...filas].join('\r\n');
+
+    const hoy = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="auditoria_${hoy}.csv"`);
+    res.send(csv);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
 module.exports = router;
 
 // GET /reservas/auditoria?accion=... [solo administrador]
