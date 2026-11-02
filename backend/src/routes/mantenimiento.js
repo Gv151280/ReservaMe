@@ -1,6 +1,7 @@
 const express = require('express');
 const prisma = require('../db');
 const { enviarPush } = require('../lib/push');
+const { registrarEjecucion } = require('../lib/estadoTarea');
 
 const router = express.Router();
 
@@ -31,6 +32,7 @@ router.get('/recordatorio-respaldo', async (req, res) => {
       }
     }
 
+    await registrarEjecucion('respaldo-semanal', { administradores: admins.length, enviados });
     res.json({ administradores: admins.length, enviados });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
