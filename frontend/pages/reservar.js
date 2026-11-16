@@ -353,25 +353,14 @@ export default function Reservar() {
             </div>
           </div>
 
-          <div className="field">
+                    <div className="field">
             <label>Tipo de uso</label>
             <div className="segmented">
               <button className={tipoUso === 'clase' ? 'active' : ''} onClick={() => setTipoUso('clase')}>📘 Clase</button>
               <button className={tipoUso === 'reunion_otro' ? 'active' : ''} onClick={() => setTipoUso('reunion_otro')}>🤝 Reunión / otro</button>
             </div>
-              {tipoUso === 'reunion_otro' && (
+            {tipoUso === 'reunion_otro' && (
               <p className="hint">El horario de reuniones debe ser confirmado por el encargado de la sala.</p>
-            )}
-            {tipoUso === 'clase' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
-                <div className={`switch ${repetir ? 'on' : ''}`} onClick={() => setRepetir((r) => !r)} />
-                <span style={{ fontSize: 13 }}>Repetir la próxima semana</span>
-              </div>
-            )}
-            {tipoUso === 'clase' && repetir && (
-              <p className="hint">
-              Se intentará reservar el mismo día y horario esta semana y la siguiente (máximo 2 reservas). Si la semana siguiente ya está ocupada, se omite y la de esta semana se crea igual.
-              </p>
             )}
           </div>
 
@@ -385,8 +374,32 @@ export default function Reservar() {
             </div>
           )}
 
-          <button className="btn btn-primary btn-block" onClick={continuarPaso1}>Continuar</button>
-        </>
+          {tipoUso === 'clase' && (
+            <div
+              className="field"
+              style={{
+                background: repetir ? 'var(--purple-light, #ede4f5)' : 'var(--gray-light, #f4f4f6)',
+                borderRadius: 12,
+                padding: '12px 14px',
+                marginTop: 4,
+              }}
+            >
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+                onClick={() => setRepetir((r) => !r)}
+              >
+                <div className={`switch ${repetir ? 'on' : ''}`} />
+                <span style={{ fontSize: 14, fontWeight: 600 }}>🔁 Repetir la próxima semana</span>
+              </div>
+              {repetir && (
+                <p className="hint" style={{ marginTop: 8, marginBottom: 0 }}>
+                  Se intentará reservar el mismo día y horario esta semana y la siguiente (máximo 2 reservas). Si la semana siguiente ya está ocupada, se omite y la de esta semana se crea igual.
+                </p>
+              )}
+            </div>
+          )}
+
+          <button className="btn btn-primary btn-block" style={{ marginTop: 16 }} onClick={continuarPaso1}>Continuar</button>        </>
       )}
 
       {paso === 2 && tipoUso === 'clase' && (
