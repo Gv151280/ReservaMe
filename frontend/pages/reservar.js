@@ -95,7 +95,9 @@ export default function Reservar() {
     api.get(`/salas/${salaId}/disponibilidad?fecha=${fecha}`).then(setDisponibilidad);
     setBloqueInicio(null);
   }, [salaId, fecha]);
-  
+    
+  const bloquesDia = disponibilidad?.bloques || [];
+
   // Vista previa de las semanas siguientes, ANTES de confirmar, cuando "repetir" está activo.
   useEffect(() => {
     if (!repetir || tipoUso !== 'clase' || bloqueInicio === null || !salaId) {
@@ -128,9 +130,7 @@ export default function Reservar() {
 
     return () => { cancelado = true; };
   }, [repetir, tipoUso, bloqueInicio, salaId, fecha, bloquesDia]);
-
-  const bloquesDia = disponibilidad?.bloques || [];
-
+  
   const bloquesRenderizados = useMemo(() => {
     return bloquesDia.map((b, i) => {
       let deshabilitado = b.pasado || b.ocupado;
