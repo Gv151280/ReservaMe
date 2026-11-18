@@ -196,7 +196,7 @@ export default function Reservar() {
     setPaso(4);
   }
 
-  async function confirmarReserva() {
+    async function confirmarReserva() {
     let fechaInicioISO, fechaFinISO;
     if (tipoUso === 'clase') {
       const b = bloquesRenderizados[bloqueInicio];
@@ -221,28 +221,6 @@ export default function Reservar() {
         fechaInicio: fechaInicioISO,
         fechaFin: fechaFinISO,
         equipamientoSolicitado,
-      });
-      setResultado(data.reserva);
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setEnviando(false);
-    }
-  }
-
-    async function enviarReporteProblema() {
-    if (!descripcionProblema.trim()) {
-      showToast('Describe el problema antes de enviarlo.', 'error');
-      return;
-    }
-    setEnviando(true);
-    try {
-      const data = await api.post('/reservas', {
-        salaId,
-        tipoUso,
-        fechaInicio: fechaInicioISO,
-        fechaFin: fechaFinISO,
-        equipamientoSolicitado,
         repetir: tipoUso === 'clase' ? repetir : false,
       });
       if (data.omitidas && data.omitidas.length > 0) {
@@ -256,7 +234,24 @@ export default function Reservar() {
       setEnviando(false);
     }
   }
-  function volver() {
+
+  async function enviarReporteProblema() {
+    if (!descripcionProblema.trim()) {
+      showToast('Describe el problema antes de enviarlo.', 'error');
+      return;
+    }
+    setEnviandoProblema(true);
+    try {
+      await api.post(`/salas/${salaId}/incidencias`, { descripcion: descripcionProblema.trim() });
+      showToast('Problema reportado. El encargado fue notificado.', 'success');
+      setReportandoProblema(false);
+      setDescripcionProblema('');
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setEnviandoProblema(false);
+    }
+  }  function volver() {
     if (resultado) { router.push('/mis-reservas'); return; }
     if (paso === 1) { router.back(); return; }
     setPaso(paso - 1);
