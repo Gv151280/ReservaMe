@@ -223,11 +223,10 @@ export default function Reservar() {
         equipamientoSolicitado,
         repetir: tipoUso === 'clase' ? repetir : false,
       });
-      if (data.omitidas && data.omitidas.length > 0) {
-        const detalle = data.omitidas.map((o) => `${o.fecha}: ${o.motivo}`).join(' · ');
-        showToast(`Se crearon ${data.creadas} de ${data.creadas + data.omitidas.length} reservas. Omitidas: ${detalle}`, 'info');
-      }
-      setResultado(data.reserva);
+    setResultado({
+        ...data.reserva,
+        _serieInfo: data.serieId ? { creadas: data.creadas, omitidas: data.omitidas || [] } : null,
+      });
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -277,6 +276,19 @@ export default function Reservar() {
           <>
             <div className="icono-resultado-exito">✅</div>
             <h2 style={{ textAlign: 'center' }}>Reserva Exitosa</h2>
+            {resultado._serieInfo && (
+              <div style={{ background: 'var(--gray-light)', borderRadius: 12, padding: '12px 14px', marginTop: 10 }}>
+                <p className="hint" style={{ margin: 0, fontWeight: 600 }}>
+                  🔁 Serie recurrente: se crearon {resultado._serieInfo.creadas} de{' '}
+                  {resultado._serieInfo.creadas + resultado._serieInfo.omitidas.length} reservas.
+                </p>
+                {resultado._serieInfo.omitidas.length > 0 && (
+                  <p className="hint" style={{ margin: '6px 0 0', color: 'var(--coral-dark)' }}>
+                    No se pudo reservar: {resultado._serieInfo.omitidas.map((o) => `${o.fecha} (${o.motivo})`).join(', ')}.
+                  </p>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <>
