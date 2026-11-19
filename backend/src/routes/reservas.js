@@ -186,12 +186,21 @@ router.post('/', requireAuth, async (req, res) => {
       throw errorHttp(409, 'No se pudo crear ninguna reserva: todas las semanas tienen conflicto.');
     }
 
+    // Si al final solo se pudo crear UNA ocurrencia, no tiene sentido tratarla como
+    // parte de una serie (no queda nada más que "cancelar en conjunto"): se deja
+    // como una reserva normal, sin serieId.
+    let serieIdFinal = serieId;
+    if (creadas.length === 1) {
+      await prisma.reserva.update({ where: { id: creadas[0].id }, data: { serieId: null } });
+      creadas[0].serieId = null;
+      serieIdFinal = null;
+    }
+
     for (const reserva of creadas) {
       await notificarReservaConfirmada({ reserva, sala, usuarioId: req.user.id });
     }
 
-    res.status(201).json({ reserva: creadas[0], serieId, creadas: creadas.length, omitidas });
-  } catch (err) {
+    res.status(201).json({ reserva: creadas[0], serieId: serieIdFinal, creadas: creadas.length, omitidas, recurrente: true });  } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
 });
