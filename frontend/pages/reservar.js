@@ -99,6 +99,8 @@ export default function Reservar() {
   const bloquesDia = disponibilidad?.bloques || [];
 
   // Vista previa de las semanas siguientes, ANTES de confirmar, cuando "repetir" está activo.
+  // Revisa también la hora siguiente cuando la duración es de 90 minutos, igual que
+  // se hace al renderizar los bloques del día actual (bloquesRenderizados).
   useEffect(() => {
     if (!repetir || tipoUso !== 'clase' || bloqueInicio === null || !salaId) {
       setPreviaSemanas(null);
@@ -115,12 +117,30 @@ export default function Reservar() {
         const fechaSemana = addDiasISO(fecha, i * 7);
         try {
           const d = await api.get(`/salas/${salaId}/disponibilidad?fecha=${fechaSemana}`);
-          const match = (d.bloques || []).find((b) => b.start === bloqueBase.start);
-          resultados.push({
-            fecha: fechaSemana,
-            disponible: d.abierto && match && !match.ocupado && !match.pasado,
-            motivo: !d.abierto ? 'Sin jornada ese día' : !match ? 'Esa hora no existe ese día' : match.ocupado ? 'Hora ya reservada por otro profesor' : null,
-          });
+          const bloquesSemana = d.bloques || [];
+          const idx = bloquesSemana.findIndex((b) => b.start === bloqueBase.start);
+          const match = idx >= 0 ? bloquesSemana[idx] : null;
+
+          let disponible = d.abierto && match && !match.ocupado && !match.pasado;
+          let motivo = !d.abierto
+            ? 'Sin jornada ese día'
+            : !match
+            ? 'Esa hora no existe ese día'
+            : match.ocupado
+            ? 'Hora ya reservada por otro profesor'
+            : match.pasado
+            ? 'Ese horario ya pasó'
+            : null;
+
+          if (disponible && duracion === 90) {
+            const sig = bloquesSemana[idx + 1];
+            if (!sig || sig.ocupado || sig.pasado) {
+              disponible = false;
+              motivo = 'La segunda hora de ese bloque ya está reservada';
+            }
+          }
+
+          resultados.push({ fecha: fechaSemana, disponible, motivo });
         } catch {
           resultados.push({ fecha: fechaSemana, disponible: false, motivo: 'No se pudo verificar' });
         }
@@ -129,8 +149,7 @@ export default function Reservar() {
     })();
 
     return () => { cancelado = true; };
-  }, [repetir, tipoUso, bloqueInicio, salaId, fecha, bloquesDia]);
-  
+  }, [repetir, tipoUso, bloqueInicio, salaId, fecha, bloquesDia, duracion]);  
   const bloquesRenderizados = useMemo(() => {
     return bloquesDia.map((b, i) => {
       let deshabilitado = b.pasado || b.ocupado;
@@ -225,7 +244,7 @@ export default function Reservar() {
       });
     setResultado({
         ...data.reserva,
-        _serieInfo: data.serieId ? { creadas: data.creadas, omitidas: data.omitidas || [] } : null,
+        _serieInfo: data.recurrente ? { creadas: data.creadas, omitidas: data.omitidas || [] } : null,
       });
     } catch (err) {
       showToast(err.message, 'error');
